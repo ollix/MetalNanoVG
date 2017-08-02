@@ -184,6 +184,12 @@ typedef struct MNVGcontext MNVGcontext;
 const MTLResourceOptions kMetalBufferOptions = \
     (MTLResourceCPUCacheModeWriteCombined | MTLResourceStorageModeShared);
 
+// The color used to clear the color texture.
+MTLClearColor s_colorBufferClearColor;
+
+// The action performed at the sart of a color rendering pass.
+MTLLoadAction s_colorBufferLoadAction = MTLLoadActionClear;
+
 static int mtlnvg__maxi(int a, int b) { return a > b ? a : b; }
 
 static MNVGcall* mtlnvg__allocCall(MNVGcontext* mtl) {
@@ -463,16 +469,15 @@ static id<MTLRenderCommandEncoder> mtlnvg__renderCommandEncoder(
     MNVGcontext* mtl) {
   MTLRenderPassDescriptor *descriptor = \
       [MTLRenderPassDescriptor renderPassDescriptor];
+  descriptor.colorAttachments[0].clearColor = s_colorBufferClearColor;
+  descriptor.colorAttachments[0].loadAction = s_colorBufferLoadAction;
+  descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
   descriptor.colorAttachments[0].texture = mtl->drawable.texture;
-    descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-  descriptor.stencilAttachment.texture = mtl->stencilTexture;
-  descriptor.stencilAttachment.storeAction = MTLStoreActionDontCare;
 
-  descriptor.colorAttachments[0].clearColor = \
-      MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
-  descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
   descriptor.stencilAttachment.clearStencil = 0;
   descriptor.stencilAttachment.loadAction = MTLLoadActionClear;
+  descriptor.stencilAttachment.storeAction = MTLStoreActionDontCare;
+  descriptor.stencilAttachment.texture = mtl->stencilTexture;
 
   id<MTLRenderCommandEncoder> encoder = [mtl->commandBuffer
       renderCommandEncoderWithDescriptor:descriptor];
@@ -1314,4 +1319,16 @@ error:
 
 void nvgDeleteMTL(NVGcontext* ctx) {
   nvgDeleteInternal(ctx);
+}
+
+void mnvgClear(int enabled) {
+  s_colorBufferLoadAction = enabled ? MTLLoadActionClear : MTLLoadActionLoad;
+}
+
+void mnvgClearColor(NVGcolor color) {
+  float alpha = (float)color.a;
+  s_colorBufferClearColor = MTLClearColorMake((float)color.r * alpha,
+                                              (float)color.g * alpha,
+                                              (float)color.b * alpha,
+                                              (float)color.a);
 }

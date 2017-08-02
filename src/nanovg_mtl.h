@@ -58,6 +58,17 @@ NVGcontext* nvgCreateMTL(void* metalLayer, int flags);
 // Deletes the specified NanoVG context.
 void nvgDeleteMTL(NVGcontext* ctx);
 
+//
+// Metal bridging functions
+//
+
+// Sets whether to always clear the color buffers before rendering.
+// This function is enabled by default.
+void mnvgClear(int enabled);
+
+// Specifies the clear color for the color buffers.
+void mnvgClearColor(NVGcolor color);
+
 #ifdef __cplusplus
 }
 #endif
