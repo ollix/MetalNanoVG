@@ -49,6 +49,11 @@ enum NVGimageFlagsMetal {
   NVG_IMAGE_NODELETE = 1 << 16, // Do not delete Metal texture handle.
 };
 
+struct MNVGframebuffer {
+  NVGcontext* ctx;
+  int image;
+};
+typedef struct MNVGframebuffer MNVGframebuffer;
 
 // Creates a new NanoVG context. The `metalLayer` parameter should be a
 // `CAMetalLayer` object, and the `flags` should be combination of
@@ -57,6 +62,20 @@ NVGcontext* nvgCreateMTL(void* metalLayer, int flags);
 
 // Deletes the specified NanoVG context.
 void nvgDeleteMTL(NVGcontext* ctx);
+
+//
+// Framebuffer
+//
+
+// Binds the specified framebuffer as the current render pass.
+void mnvgBindFramebuffer(MNVGframebuffer* framebuffer);
+
+// Creates a new framebuffer.
+MNVGframebuffer* mnvgCreateFramebuffer(NVGcontext* ctx, int width,
+                                       int height, int imageFlags);
+
+// Deletes the specified framebuffer.
+void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 
 //
 // Metal bridging functions

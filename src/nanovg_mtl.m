@@ -172,6 +172,7 @@ struct MNVGcontext {
   id<MTLDepthStencilState> strokeClearStencilState;
   id<MTLFunction> fragmentFunction;
   id<MTLFunction> vertexFunction;
+  MTLPixelFormat piplelinePixelFormat;
   id<MTLRenderPipelineState> pipelineState;
   id<MTLRenderPipelineState> stencilOnlyPipelineState;
   id<MTLSamplerState> pseudoSampler;
@@ -189,6 +190,9 @@ MTLClearColor s_colorBufferClearColor;
 
 // The action performed at the sart of a color rendering pass.
 MTLLoadAction s_colorBufferLoadAction = MTLLoadActionClear;
+
+// Keeps the weak reference to the currently binded framebuffer.
+MNVGframebuffer* s_framebuffer = NULL;
 
 static int mtlnvg__maxi(int a, int b) { return a > b ? a : b; }
 
@@ -466,13 +470,13 @@ static int mtlnvg__maxVertCount(const NVGpath* paths, int npaths,
 }
 
 static id<MTLRenderCommandEncoder> mtlnvg__renderCommandEncoder(
-    MNVGcontext* mtl) {
+    MNVGcontext* mtl, id<MTLTexture> colorTexture) {
   MTLRenderPassDescriptor *descriptor = \
       [MTLRenderPassDescriptor renderPassDescriptor];
   descriptor.colorAttachments[0].clearColor = s_colorBufferClearColor;
   descriptor.colorAttachments[0].loadAction = s_colorBufferLoadAction;
   descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-  descriptor.colorAttachments[0].texture = mtl->drawable.texture;
+  descriptor.colorAttachments[0].texture = colorTexture;
 
   descriptor.stencilAttachment.clearStencil = 0;
   descriptor.stencilAttachment.loadAction = MTLLoadActionClear;
@@ -516,9 +520,11 @@ static void mtlnvg__setUniforms(MNVGcontext* mtl, int uniformOffset,
 }
 
 static void mtlnvg__updateRenderPipelineStates(MNVGcontext* mtl,
-                                               MNVGblend* blend) {
+                                               MNVGblend* blend,
+                                               MTLPixelFormat pixelFormat) {
   if (mtl->pipelineState != nil &&
       mtl->stencilOnlyPipelineState != nil &&
+      mtl->piplelinePixelFormat == pixelFormat &&
       mtl->blendFunc.srcRGB == blend->srcRGB &&
       mtl->blendFunc.dstRGB == blend->dstRGB &&
       mtl->blendFunc.srcAlpha == blend->srcAlpha &&
@@ -540,7 +546,7 @@ static void mtlnvg__updateRenderPipelineStates(MNVGcontext* mtl,
 
   MTLRenderPipelineColorAttachmentDescriptor* colorAttachmentDescriptor = \
       pipelineStateDescriptor.colorAttachments[0];
-  colorAttachmentDescriptor.pixelFormat = mtl->metalLayer.pixelFormat;
+  colorAttachmentDescriptor.pixelFormat = pixelFormat;
   pipelineStateDescriptor.stencilAttachmentPixelFormat = MTLPixelFormatStencil8;
   pipelineStateDescriptor.fragmentFunction = mtl->fragmentFunction;
   pipelineStateDescriptor.vertexFunction = mtl->vertexFunction;
@@ -571,6 +577,25 @@ static void mtlnvg__updateRenderPipelineStates(MNVGcontext* mtl,
   mtlnvg__checkError(mtl, "init pipeline stencil only state", error);
 
   [pipelineStateDescriptor release];
+  mtl->piplelinePixelFormat = pixelFormat;
+}
+
+// Re-creates stencil texture whenever the specified size is bigger.
+static void mtlnvg__updateStencilTexture(MNVGcontext* mtl, vector_uint2* size) {
+  if (mtl->stencilTexture != nil && (mtl->stencilTexture.width < size->x ||
+                                     mtl->stencilTexture.height < size->y)) {
+    [mtl->stencilTexture release];
+    mtl->stencilTexture = nil;
+  }
+  if (mtl->stencilTexture == nil) {
+    MTLTextureDescriptor *stencilTextureDescriptor = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatStencil8
+        width:size->x
+        height:size->y
+        mipmapped:NO];
+    mtl->stencilTexture = [mtl->metalLayer.device
+        newTextureWithDescriptor:stencilTextureDescriptor];
+  }
 }
 
 static void mtlnvg__vset(NVGvertex* vtx, float x, float y, float u, float v) {
@@ -1067,34 +1092,33 @@ error:
 
 static void mtlnvg__renderFlush(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
+  id<MTLTexture> colorTexture;
+  vector_uint2 textureSize;
 
-  // Updates stencil texture whenever viewport size shrinks.
-  if (mtl->stencilTexture != nil &&
-      (mtl->stencilTexture.width < mtl->viewPortSize.x ||
-       mtl->stencilTexture.height < mtl->viewPortSize.y)) {
-    [mtl->stencilTexture release];
-    mtl->stencilTexture = nil;
+  if (s_framebuffer == NULL ||
+      nvgInternalParams(s_framebuffer->ctx)->userPtr != mtl) {
+    mtl->drawable = mtl->metalLayer.nextDrawable;
+    colorTexture = mtl->drawable.texture;
+    textureSize = mtl->viewPortSize;
+  } else {
+    mtl->drawable = nil;
+    MNVGtexture* tex = mtlnvg__findTexture(mtl, s_framebuffer->image);
+    colorTexture = tex->tex;
+    textureSize = (vector_uint2){(uint)colorTexture.width,
+                                 (uint)colorTexture.height};
   }
-  if (mtl->stencilTexture == nil) {
-    MTLTextureDescriptor *stencilTextureDescriptor = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:MTLPixelFormatStencil8
-        width:mtl->viewPortSize.x
-        height:mtl->viewPortSize.y
-        mipmapped:NO];
-    mtl->stencilTexture = [mtl->metalLayer.device
-        newTextureWithDescriptor:stencilTextureDescriptor];
-  }
+  if (textureSize.x == 0 || textureSize.y == 0) return;
+  mtlnvg__updateStencilTexture(mtl, &textureSize);
 
   // Submits commands.
   mtl->commandBuffer = [mtl->commandQueue commandBuffer];
-  mtl->drawable = mtl->metalLayer.nextDrawable;
-  mtl->renderEncoder = mtlnvg__renderCommandEncoder(mtl);
+  mtl->renderEncoder = mtlnvg__renderCommandEncoder(mtl, colorTexture);
   @autoreleasepool {
     for (int i = 0; i < mtl->ncalls; i++) {
       MNVGcall* call = &mtl->calls[i];
 
       MNVGblend* blend = &call->blendFunc;
-      mtlnvg__updateRenderPipelineStates(mtl, blend);
+      mtlnvg__updateRenderPipelineStates(mtl, blend, colorTexture.pixelFormat);
 
       if (call->type == MNVG_FILL)
         mtlnvg__fill(mtl, call);
@@ -1108,8 +1132,10 @@ static void mtlnvg__renderFlush(void* uptr) {
   }
 
   [mtl->renderEncoder endEncoding];
-  [mtl->commandBuffer presentDrawable:mtl->drawable];
-  mtl->drawable = nil;
+  if (mtl->drawable) {
+    [mtl->commandBuffer presentDrawable:mtl->drawable];
+    mtl->drawable = nil;
+  }
 
   [mtl->commandBuffer commit];
   [mtl->commandBuffer waitUntilCompleted];
@@ -1319,6 +1345,33 @@ error:
 
 void nvgDeleteMTL(NVGcontext* ctx) {
   nvgDeleteInternal(ctx);
+}
+
+void mnvgBindFramebuffer(MNVGframebuffer* framebuffer) {
+  s_framebuffer = framebuffer;
+}
+
+MNVGframebuffer* mnvgCreateFramebuffer(NVGcontext* ctx, int width,
+                                       int height, int imageFlags) {
+  MNVGframebuffer* framebuffer = \
+      (MNVGframebuffer*)malloc(sizeof(MNVGframebuffer));
+  if (framebuffer == NULL)
+    return NULL;
+
+  memset(framebuffer, 0, sizeof(MNVGframebuffer));
+  framebuffer->image = nvgCreateImageRGBA(ctx, width, height,
+                                          imageFlags | NVG_IMAGE_PREMULTIPLIED,
+                                          NULL);
+  framebuffer->ctx = ctx;
+  return framebuffer;
+}
+
+void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer) {
+  if (framebuffer == NULL) return;
+  if (framebuffer->image > 0) {
+    nvgDeleteImage(framebuffer->ctx, framebuffer->image);
+  }
+  free(framebuffer);
 }
 
 void mnvgClear(int enabled) {
