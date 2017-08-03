@@ -1332,3 +1332,22 @@ void mnvgClearColor(NVGcolor color) {
                                               (float)color.b * alpha,
                                               (float)color.a);
 }
+
+void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
+                    int height, void* data) {
+  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  MNVGtexture* tex = mtlnvg__findTexture(mtl, image);
+  if (tex == NULL) return 0;
+
+  NSUInteger bytesPerRow;
+  if (tex->type == NVG_TEXTURE_RGBA) {
+    bytesPerRow = tex->tex.width * 4;
+  } else {
+    bytesPerRow = tex->tex.width;
+  }
+
+  [tex->tex getBytes:data
+         bytesPerRow:bytesPerRow
+          fromRegion:MTLRegionMake2D(x, y, width, height)
+         mipmapLevel:0];
+}

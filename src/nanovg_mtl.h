@@ -69,6 +69,10 @@ void mnvgClear(int enabled);
 // Specifies the clear color for the color buffers.
 void mnvgClearColor(NVGcolor color);
 
+// Copies the pixels from the specified image into the specified `data`.
+void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
+                    int height, void* data);
+
 #ifdef __cplusplus
 }
 #endif
