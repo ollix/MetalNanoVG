@@ -456,15 +456,18 @@ static MNVGfragUniforms* mtlnvg__fragUniformPtr(MNVGcontext* mtl, int i) {
 }
 
 static int mtlnvg__maxVertCount(const NVGpath* paths, int npaths,
-                                int* index_count) {
+                                int* indexCount) {
   int i, count = 0;
-  if (index_count != NULL)
-    *index_count = 0;
+  if (indexCount != NULL)
+    *indexCount = 0;
   for (i = 0; i < npaths; i++) {
-    count += paths[i].nfill;
+    const int nfill = paths[i].nfill;
+    if (nfill > 2) {
+      count += nfill;
+      if (indexCount != NULL)
+        *indexCount += (nfill - 2) * 3;
+    }
     count += paths[i].nstroke;
-    if (index_count != NULL)
-      *index_count += (paths[i].nfill - 2) * 3;
   }
   return count;
 }
@@ -1042,7 +1045,7 @@ static void mtlnvg__renderFill(void* uptr, NVGpaint* paint,
     MNVGpath* copy = &mtl->paths[call->pathOffset + i];
     const NVGpath* path = &paths[i];
     memset(copy, 0, sizeof(MNVGpath));
-    if (path->nfill > 0) {
+    if (path->nfill > 2) {
       copy->fillOffset = vertOffset;
       copy->fillCount = path->nfill;
       memcpy(&mtl->verts[vertOffset], path->fill,
