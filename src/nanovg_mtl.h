@@ -40,6 +40,9 @@ enum NVGcreateFlags {
   // The rendering will be a little slower, but path overlaps
   // (i.e. self-intersecting or sharp turns) will be drawn just once.
   NVG_STENCIL_STROKES = 1 << 1,
+  // Flag indicating if triple buffering scheme is used. This mode helps
+  // reducing processor idle.
+  NVG_TRIPLE_BUFFERING = 1 << 16,
   // Flag indicating that additional debug checks are done.
   NVG_DEBUG = 1 << 2,
 };
