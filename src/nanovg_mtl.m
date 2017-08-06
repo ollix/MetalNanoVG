@@ -148,7 +148,7 @@ struct MNVGcontext {
   int cpaths;
   int npaths;
   id<MTLBuffer> indexBuffer;
-  uint16_t* indexes;
+  uint32_t* indexes;
   int cindexes;
   int nindexes;
   id<MTLBuffer> vertBuffer;
@@ -279,7 +279,7 @@ static int mtlnvg__allocIndexes(MNVGcontext* mtl, int n) {
     id<MTLBuffer> buffer = [mtl->metalLayer.device
         newBufferWithLength:(mtl->indexSize * cindexes)
         options:kMetalBufferOptions];
-    uint16_t* indexes = [buffer contents];
+    uint32_t* indexes = [buffer contents];
     if (mtl->indexBuffer != nil) {
       memcpy(indexes, mtl->indexes, mtl->indexSize * mtl->nindexes);
       [mtl->indexBuffer release];
@@ -619,7 +619,7 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
   [mtl->renderEncoder setRenderPipelineState:mtl->stencilOnlyPipelineState];
   [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                  indexCount:call->indexCount
-                                  indexType:MTLIndexTypeUInt16
+                                  indexType:MTLIndexTypeUInt32
                                 indexBuffer:mtl->indexBuffer
                           indexBufferOffset:kIndexBufferOffset];
 
@@ -656,7 +656,7 @@ static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
   [mtl->renderEncoder setRenderPipelineState:mtl->pipelineState];
   [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                  indexCount:call->indexCount
-                                  indexType:MTLIndexTypeUInt16
+                                  indexType:MTLIndexTypeUInt32
                                 indexBuffer:mtl->indexBuffer
                           indexBufferOffset:kIndexBufferOffset];
 
@@ -1039,7 +1039,7 @@ static void mtlnvg__renderFill(void* uptr, NVGpaint* paint,
   if (indexOffset == -1) goto error;
   call->indexOffset = indexOffset;
   call->indexCount = maxindexes;
-  uint16_t* index = &mtl->indexes[indexOffset];
+  uint32_t* index = &mtl->indexes[indexOffset];
 
   for (i = 0; i < npaths; i++) {
     MNVGpath* copy = &mtl->paths[call->pathOffset + i];
@@ -1333,7 +1333,7 @@ NVGcontext* nvgCreateMTL(void* metalLayer, int flags) {
 
   mtl->flags = flags;
   mtl->fragSize = sizeof(MNVGfragUniforms);
-  mtl->indexSize = 2;  // MTLIndexTypeUInt16
+  mtl->indexSize = 4;  // MTLIndexTypeUInt32
   mtl->metalLayer = (__bridge CAMetalLayer*)metalLayer;
 
   ctx = nvgCreateInternal(&params);
