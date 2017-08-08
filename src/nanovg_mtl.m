@@ -523,14 +523,13 @@ static id<MTLRenderCommandEncoder> mtlnvg__renderCommandEncoder(
                    offset:0
                   atIndex:MNVG_VERTEX_INPUT_INDEX_VIEW_SIZE];
 
+  [encoder setFragmentBuffer:mtl->buffers->uniformBuffer offset:0 atIndex:0];
   return encoder;
 }
 
 static void mtlnvg__setUniforms(MNVGcontext* mtl, int uniformOffset,
                                 int image) {
-  [mtl->renderEncoder setFragmentBuffer:mtl->buffers->uniformBuffer
-                                 offset:uniformOffset
-                                atIndex:0];
+  [mtl->renderEncoder setFragmentBufferOffset:uniformOffset atIndex:0];
 
   MNVGtexture* tex = (image == 0 ? NULL : mtlnvg__findTexture(mtl, image));
   if (tex != NULL) {
@@ -785,10 +784,16 @@ static int mtlnvg__renderCreate(void* uptr) {
   }
 
   mtl->vertexFunction = [library newFunctionWithName:@"vertexShader"];
-  mtl->fragmentFunction = \
-      mtl->flags & NVG_ANTIALIAS ?
-      [library newFunctionWithName:@"fragmentShaderAA"] :
-      [library newFunctionWithName:@"fragmentShader"];
+  if (mtl->flags & NVG_ANTIALIAS) {
+    if (mtl->flags & NVG_STENCIL_STROKES) {
+      mtl->fragmentFunction = \
+          [library newFunctionWithName:@"fragmentShaderStencilStrokesAA"];
+    } else {
+      mtl->fragmentFunction = [library newFunctionWithName:@"fragmentShaderAA"];
+    }
+  } else {
+    mtl->fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
+  }
 
   mtl->commandQueue = [device newCommandQueue];
 

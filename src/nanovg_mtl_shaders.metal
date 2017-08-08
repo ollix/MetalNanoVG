@@ -51,57 +51,60 @@ typedef struct  {
   float strokeThr;
   int texType;
   int type;
-} MNVGfragUniforms;
+} Uniforms;
 
-float scissorMask(constant MNVGfragUniforms& uniforms, float2 p);
-float sdroundrect(constant MNVGfragUniforms& uniforms, float2 pt);
-float strokeMask(float2 ftcoord, float strokeMult);
+float scissorMask(constant Uniforms& uniforms, float2 p);
+float sdroundrect(constant Uniforms& uniforms, float2 pt);
+float strokeMask(constant Uniforms& uniforms, float2 ftcoord);
 
-float scissorMask(constant MNVGfragUniforms& uniforms, float2 p) {
-  float2 sc = (abs((uniforms.scissorMat * float3(p, 1.0f)).xy) - uniforms.scissorExt);
-  sc = float2(0.5f, 0.5f) - sc * uniforms.scissorScale;
-  return clamp(sc.x, 0.0f, 1.0f) * clamp(sc.y, 0.0f, 1.0f);
+float scissorMask(constant Uniforms& uniforms, float2 p) {
+  float2 sc = (abs((uniforms.scissorMat * float3(p, 1.0f)).xy)
+                  - uniforms.scissorExt) \
+              * uniforms.scissorScale;
+  sc = saturate(float2(0.5f) - sc);
+  return sc.x * sc.y;
 }
 
-float sdroundrect(constant MNVGfragUniforms& uniforms, float2 pt) {
+float sdroundrect(constant Uniforms& uniforms, float2 pt) {
   float2 ext2 = uniforms.extent - float2(uniforms.radius);
   float2 d = abs(pt) - ext2;
   return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - uniforms.radius;
 }
 
+float strokeMask(constant Uniforms& uniforms, float2 ftcoord) {
+  return min(1.0, (1.0 - abs(ftcoord.x * 2.0 - 1.0)) * uniforms.strokeMult) \
+         * min(1.0, ftcoord.y);
+}
+
 // Vertex Function
-vertex RasterizerData vertexShader(
-    Vertex vert [[stage_in]],
-    constant float2& viewSize [[buffer(1)]]) {
+vertex RasterizerData vertexShader(Vertex vert [[stage_in]],
+                                   constant float2& viewSize [[buffer(1)]]) {
   RasterizerData out;
   out.ftcoord = vert.tcoord;
   out.fpos = vert.pos;
   out.pos = float4(2.0 * vert.pos.x / viewSize.x - 1.0,
                    1.0 - 2.0 * vert.pos.y / viewSize.y,
-                   0.5, 1);
+                   0, 1);
   return out;
 }
 
 // Fragment function (No AA)
-fragment float4 fragmentShader(
-    RasterizerData in [[stage_in]],
-    constant MNVGfragUniforms& uniforms [[buffer(0)]],
-    texture2d<float> texture [[texture(0)]],
-    sampler sampler [[sampler(0)]]) {
+fragment float4 fragmentShader(RasterizerData in [[stage_in]],
+                               constant Uniforms& uniforms [[buffer(0)]],
+                               texture2d<float> texture [[texture(0)]],
+                               sampler sampler [[sampler(0)]]) {
   float scissor = scissorMask(uniforms, in.fpos);
   if (scissor == 0)
     return float4(0);
 
   if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD
     float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy;
-    float d = clamp((sdroundrect(uniforms, pt) + uniforms.feather * 0.5)
-                        / uniforms.feather,
-                    0.0, 1.0);
+    float d = saturate((uniforms.feather * 0.5 + sdroundrect(uniforms, pt))
+                       / uniforms.feather);
     float4 color = mix(uniforms.innerCol, uniforms.outerCol, d);
     return color * scissor;
   } else if (uniforms.type == 1) {  // MNVG_SHADER_FILLIMG
-    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy \
-                / uniforms.extent;
+    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy / uniforms.extent;
     float4 color = texture.sample(sampler, pt);
     if (uniforms.texType == 1)
       color = float4(color.xyz * color.w, color.w);
@@ -121,9 +124,54 @@ fragment float4 fragmentShader(
 }
 
 // Fragment function (AA)
-fragment float4 fragmentShaderAA(
+fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
+                                 constant Uniforms& uniforms [[buffer(0)]],
+                                 texture2d<float> texture [[texture(0)]],
+                                 sampler sampler [[sampler(0)]]) {
+  float scissor = scissorMask(uniforms, in.fpos);
+  if (scissor == 0)
+    return float4(0);
+
+  if (uniforms.type == 2) {  // MNVG_SHADER_IMG
+    float4 color = texture.sample(sampler, in.ftcoord);
+    if (uniforms.texType == 1)
+      color = float4(color.xyz * color.w, color.w);
+    else if (uniforms.texType == 2)
+      color = float4(color.x);
+    color *= scissor;
+    return color * uniforms.innerCol;
+  }
+
+  float strokeAlpha = strokeMask(uniforms, in.ftcoord);
+  if (strokeAlpha < uniforms.strokeThr) {
+    return float4(0);
+  }
+
+  if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD
+    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy;
+    float d = saturate((uniforms.feather * 0.5 + sdroundrect(uniforms, pt))
+                        / uniforms.feather);
+    float4 color = mix(uniforms.innerCol, uniforms.outerCol, d);
+    color *= scissor;
+    color *= strokeAlpha;
+    return color;
+  } else {  // MNVG_SHADER_FILLIMG
+    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy / uniforms.extent;
+    float4 color = texture.sample(sampler, pt);
+    if (uniforms.texType == 1)
+      color = float4(color.xyz * color.w, color.w);
+    else if (uniforms.texType == 2)
+      color = float4(color.x);
+    color *= scissor;
+    color *= strokeAlpha;
+    return color * uniforms.innerCol;
+  }
+}
+
+// // Fragment function with stencil strokes (AA)
+fragment float4 fragmentShaderStencilStrokesAA(
     RasterizerData in [[stage_in]],
-    constant MNVGfragUniforms& uniforms [[buffer(0)]],
+    constant Uniforms& uniforms [[buffer(0)]],
     texture2d<float> texture [[texture(0)]],
     sampler sampler [[sampler(0)]]) {
   float scissor = scissorMask(uniforms, in.fpos);
@@ -140,24 +188,21 @@ fragment float4 fragmentShaderAA(
     return color * uniforms.innerCol;
   }
 
-  float strokeAlpha = \
-      min(1.0, (1.0 - abs(in.ftcoord.x * 2.0 - 1.0)) * uniforms.strokeMult) \
-      * min(1.0, in.ftcoord.y);
-  if (strokeAlpha < uniforms.strokeThr)
+  float strokeAlpha = strokeMask(uniforms, in.ftcoord);
+  if (strokeAlpha < uniforms.strokeThr) {
     discard_fragment();
+  }
 
   if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD
     float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy;
-    float d = clamp((sdroundrect(uniforms, pt) + uniforms.feather * 0.5)
-                        / uniforms.feather,
-                    0.0, 1.0);
+    float d = saturate((uniforms.feather * 0.5 + sdroundrect(uniforms, pt))
+                        / uniforms.feather);
     float4 color = mix(uniforms.innerCol, uniforms.outerCol, d);
     color *= scissor;
     color *= strokeAlpha;
     return color;
   } else {  // MNVG_SHADER_FILLIMG
-    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy \
-                / uniforms.extent;
+    float2 pt = (uniforms.paintMat * float3(in.fpos, 1.0)).xy / uniforms.extent;
     float4 color = texture.sample(sampler, pt);
     if (uniforms.texType == 1)
       color = float4(color.xyz * color.w, color.w);
