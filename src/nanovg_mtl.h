@@ -84,12 +84,10 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 // Metal bridging functions
 //
 
-// Sets whether to always clear the color buffers before rendering.
-// This function is enabled by default.
-void mnvgClear(int enabled);
-
-// Specifies the clear color for the color buffers.
-void mnvgClearColor(NVGcolor color);
+// Clears the color buffer with the specified `color` for the next render pass.
+// This function simulates the combination of `glClearColor()` and `glClear()`
+// of the OpenGL backend.
+void mnvgClearWithColor(NVGcolor color);
 
 // Copies the pixels from the specified image into the specified `data`.
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,

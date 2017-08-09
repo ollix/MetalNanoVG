@@ -500,6 +500,7 @@ static id<MTLRenderCommandEncoder> mtlnvg__renderCommandEncoder(
   descriptor.colorAttachments[0].loadAction = s_colorBufferLoadAction;
   descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
   descriptor.colorAttachments[0].texture = colorTexture;
+  s_colorBufferLoadAction = MTLLoadActionLoad;
 
   descriptor.stencilAttachment.clearStencil = 0;
   descriptor.stencilAttachment.loadAction = MTLLoadActionClear;
@@ -1448,16 +1449,13 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer) {
   free(framebuffer);
 }
 
-void mnvgClear(int enabled) {
-  s_colorBufferLoadAction = enabled ? MTLLoadActionClear : MTLLoadActionLoad;
-}
-
-void mnvgClearColor(NVGcolor color) {
+void mnvgClearWithColor(NVGcolor color) {
   float alpha = (float)color.a;
   s_colorBufferClearColor = MTLClearColorMake((float)color.r * alpha,
                                               (float)color.g * alpha,
                                               (float)color.b * alpha,
                                               (float)color.a);
+  s_colorBufferLoadAction = MTLLoadActionClear;
 }
 
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
