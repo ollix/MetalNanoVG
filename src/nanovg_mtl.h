@@ -89,6 +89,15 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 // of the OpenGL backend.
 void mnvgClearWithColor(NVGcolor color);
 
+// Returns a pointer to the corresponded `id<MTLCommandQueue>` object.
+void* mnvgCommandQueue(NVGcontext* ctx);
+
+// Returns a pointer to the corresponded `id<MTLDevice>` object.
+void* mnvgDevice(NVGcontext* ctx);
+
+// Returns a pointer to the `id<MTLTexture>` object of the specified image.
+void* mnvgImageHandle(NVGcontext* ctx, int image);
+
 // Copies the pixels from the specified image into the specified `data`.
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
                     int height, void* data);

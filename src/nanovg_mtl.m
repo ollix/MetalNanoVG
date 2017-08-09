@@ -1458,11 +1458,38 @@ void mnvgClearWithColor(NVGcolor color) {
   s_colorBufferLoadAction = MTLLoadActionClear;
 }
 
+void* mnvgCommandQueue(NVGcontext* ctx) {
+  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  return (__bridge void*)mtl->commandQueue;
+}
+
+void* mnvgDevice(NVGcontext* ctx) {
+  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  return (__bridge void*)mtl->metalLayer.device;
+}
+
+void* mnvgImageHandle(NVGcontext* ctx, int image) {
+  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  MNVGtexture* tex = mtlnvg__findTexture(mtl, image);
+  if (tex == NULL) return NULL;
+
+  // Makes sure the command execution for the image has been done.
+  for (int i = 0; i < mtl->maxBuffers; ++i) {
+    MNVGbuffers* buffers = &mtl->cbuffers[i];
+    if (buffers->isBusy && buffers->image == image && buffers->commandBuffer) {
+      [buffers->commandBuffer waitUntilCompleted];
+      break;
+    }
+  }
+
+  return (__bridge void*)tex->tex;
+}
+
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
                     int height, void* data) {
   MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   MNVGtexture* tex = mtlnvg__findTexture(mtl, image);
-  if (tex == NULL) return 0;
+  if (tex == NULL) return;
 
   NSUInteger bytesPerRow;
   if (tex->type == NVG_TEXTURE_RGBA) {

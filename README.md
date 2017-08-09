@@ -17,6 +17,7 @@ Advantages
  * Various Metal states are cached whenever possible.
  * Low overheads compared to OpenGL.
  * Pre-compiled shaders. (no need to compile shaders at runtime)
+ * Seamless integration with powerful Metal features such as [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders).
 
 Installation
 ============
