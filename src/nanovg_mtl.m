@@ -962,12 +962,14 @@ static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
                 bytesPerRow:bytesPerRow];
 
     if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
-      id<MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
-      id<MTLBlitCommandEncoder> encoder = [commandBuffer blitCommandEncoder];
-      [encoder generateMipmapsForTexture:tex->tex];
-      [encoder endEncoding];
-      [commandBuffer commit];
-      [commandBuffer waitUntilCompleted];
+      @autoreleasepool {
+        id<MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
+        id<MTLBlitCommandEncoder> encoder = [commandBuffer blitCommandEncoder];
+        [encoder generateMipmapsForTexture:tex->tex];
+        [encoder endEncoding];
+        [commandBuffer commit];
+        [commandBuffer waitUntilCompleted];
+      }
     }
   }
 
@@ -1150,40 +1152,41 @@ static void mtlnvg__renderFlush(void* uptr) {
                                             mtl->viewPortSize.y);
 
   buffers->commandBuffer = [mtl->commandQueue commandBuffer];
-  [buffers->commandBuffer enqueue];
-  [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-      buffers->isBusy = NO;
-      buffers->commandBuffer = nil;
-      buffers->image = 0;
-      buffers->nindexes = 0;
-      buffers->nverts = 0;
-      buffers->npaths = 0;
-      buffers->ncalls = 0;
-      buffers->nuniforms = 0;
-      dispatch_semaphore_signal(mtl->semaphore);
-  }];
-
-  if (s_framebuffer == NULL ||
-      nvgInternalParams(s_framebuffer->ctx)->userPtr != mtl) {
-    textureSize = mtl->viewPortSize;
-  } else {  // renders in framebuffer
-    buffers->image = s_framebuffer->image;
-    MNVGtexture* tex = mtlnvg__findTexture(mtl, s_framebuffer->image);
-    colorTexture = tex->tex;
-    textureSize = (vector_uint2){(uint)colorTexture.width,
-                                 (uint)colorTexture.height};
-  }
-  if (textureSize.x == 0 || textureSize.y == 0) return;
-  mtlnvg__updateStencilTexture(mtl, &textureSize);
-
-
-  if (colorTexture == nil) {
-    drawable = mtl->metalLayer.nextDrawable;
-    colorTexture = drawable.texture;
-  }
-  mtl->renderEncoder = mtlnvg__renderCommandEncoder(mtl, buffers->commandBuffer,
-                                                    colorTexture);
   @autoreleasepool {
+    [buffers->commandBuffer enqueue];
+    [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+        buffers->isBusy = NO;
+        buffers->commandBuffer = nil;
+        buffers->image = 0;
+        buffers->nindexes = 0;
+        buffers->nverts = 0;
+        buffers->npaths = 0;
+        buffers->ncalls = 0;
+        buffers->nuniforms = 0;
+        dispatch_semaphore_signal(mtl->semaphore);
+    }];
+
+    if (s_framebuffer == NULL ||
+        nvgInternalParams(s_framebuffer->ctx)->userPtr != mtl) {
+      textureSize = mtl->viewPortSize;
+    } else {  // renders in framebuffer
+      buffers->image = s_framebuffer->image;
+      MNVGtexture* tex = mtlnvg__findTexture(mtl, s_framebuffer->image);
+      colorTexture = tex->tex;
+      textureSize = (vector_uint2){(uint)colorTexture.width,
+                                   (uint)colorTexture.height};
+    }
+    if (textureSize.x == 0 || textureSize.y == 0) return;
+    mtlnvg__updateStencilTexture(mtl, &textureSize);
+
+
+    if (colorTexture == nil) {
+      drawable = mtl->metalLayer.nextDrawable;
+      colorTexture = drawable.texture;
+    }
+    mtl->renderEncoder = mtlnvg__renderCommandEncoder(mtl,
+                                                      buffers->commandBuffer,
+                                                      colorTexture);
     for (int i = 0; i < buffers->ncalls; i++) {
       MNVGcall* call = &buffers->calls[i];
 
@@ -1199,15 +1202,15 @@ static void mtlnvg__renderFlush(void* uptr) {
       else if (call->type == MNVG_TRIANGLES)
         mtlnvg__triangles(mtl, call);
     }
-  }
 
-  [mtl->renderEncoder endEncoding];
-  mtl->renderEncoder = nil;
-  if (drawable) {
-    [buffers->commandBuffer presentDrawable:drawable];
-    drawable = nil;
-  }
-  [buffers->commandBuffer commit];
+    [mtl->renderEncoder endEncoding];
+    mtl->renderEncoder = nil;
+    if (drawable) {
+      [buffers->commandBuffer presentDrawable:drawable];
+      drawable = nil;
+    }
+    [buffers->commandBuffer commit];
+  }  // @autoreleasepool
 
   dispatch_semaphore_wait(mtl->semaphore, DISPATCH_TIME_FOREVER);
   for (int i = 0; i < mtl->maxBuffers; ++i) {
