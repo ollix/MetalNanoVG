@@ -761,8 +761,6 @@ static int mtlnvg__renderCreate(void* uptr) {
   if (mtl->metalLayer.device == nil) {
     mtl->metalLayer.device = MTLCreateSystemDefaultDevice();
   }
-  mtl->metalLayer.drawableSize = CGSizeMake(mtl->viewPortSize.x,
-                                            mtl->viewPortSize.y);
   mtl->metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 
   // Loads shaders from pre-compiled metal library..
@@ -1145,6 +1143,9 @@ static void mtlnvg__renderFlush(void* uptr) {
   id<MTLTexture> colorTexture = nil;;
   id<CAMetalDrawable> drawable = nil;
   vector_uint2 textureSize;
+
+  mtl->metalLayer.drawableSize = CGSizeMake(mtl->viewPortSize.x,
+                                            mtl->viewPortSize.y);
 
   buffers->commandBuffer = [mtl->commandQueue commandBuffer];
   [buffers->commandBuffer enqueue];
