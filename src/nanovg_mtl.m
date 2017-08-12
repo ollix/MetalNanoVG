@@ -617,6 +617,7 @@ static void mtlnvg__updateStencilTexture(MNVGcontext* mtl, vector_uint2* size) {
         width:size->x
         height:size->y
         mipmapped:NO];
+    stencilTextureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
     mtl->buffers->stencilTexture = [mtl->metalLayer.device
         newTextureWithDescriptor:stencilTextureDescriptor];
   }
@@ -943,6 +944,7 @@ static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
       width:width
       height:height
       mipmapped:(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS ? YES : NO)];
+  textureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
   tex->tex = [mtl->metalLayer.device
       newTextureWithDescriptor:textureDescriptor];
 
