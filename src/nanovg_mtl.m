@@ -185,6 +185,7 @@ struct MNVGcontext {
   id<MTLRenderPipelineState> pipelineState;
   id<MTLRenderPipelineState> stencilOnlyPipelineState;
   id<MTLSamplerState> pseudoSampler;
+  id<MTLTexture> pseudoTexture;
   MTLVertexDescriptor* vertexDescriptor;
 };
 typedef struct MNVGcontext MNVGcontext;
@@ -537,7 +538,7 @@ static void mtlnvg__setUniforms(MNVGcontext* mtl, int uniformOffset,
     [mtl->renderEncoder setFragmentTexture:tex->tex atIndex:0];
     [mtl->renderEncoder setFragmentSamplerState:tex->sampler atIndex:0];
   } else {
-    [mtl->renderEncoder setFragmentTexture:nil atIndex:0];
+    [mtl->renderEncoder setFragmentTexture:mtl->pseudoTexture atIndex:0];
     [mtl->renderEncoder setFragmentSamplerState:mtl->pseudoSampler atIndex:0];
   }
 }
@@ -617,7 +618,10 @@ static void mtlnvg__updateStencilTexture(MNVGcontext* mtl, vector_uint2* size) {
         width:size->x
         height:size->y
         mipmapped:NO];
+#if TARGET_OS_OSX == 1
     stencilTextureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
+#endif
+    stencilTextureDescriptor.usage = MTLTextureUsageRenderTarget;
     mtl->buffers->stencilTexture = [mtl->metalLayer.device
         newTextureWithDescriptor:stencilTextureDescriptor];
   }
@@ -756,6 +760,93 @@ static void mtlnvg__renderCancel(void* uptr) {
   buffers->nuniforms = 0;
 }
 
+static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
+                                       int height, int imageFlags,
+                                       const unsigned char* data) {
+  MNVGcontext* mtl = (MNVGcontext*)uptr;
+  MNVGtexture* tex = mtlnvg__allocTexture(mtl);
+
+  if (tex == NULL) return 0;
+
+  MTLPixelFormat pixelFormat = MTLPixelFormatRGBA8Unorm;
+  if (type == NVG_TEXTURE_ALPHA) {
+    pixelFormat = MTLPixelFormatR8Unorm;
+  }
+
+  tex->type = type;
+  tex->flags = imageFlags;
+
+  MTLTextureDescriptor *textureDescriptor = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:pixelFormat
+      width:width
+      height:height
+      mipmapped:(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS ? YES : NO)];
+#if TARGET_OS_OSX == 1
+  textureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
+  textureDescriptor.storageMode = MTLStorageModeManaged;
+#endif
+  textureDescriptor.usage = MTLTextureUsageShaderRead
+                            | MTLTextureUsageRenderTarget;
+  tex->tex = [mtl->metalLayer.device
+      newTextureWithDescriptor:textureDescriptor];
+
+  if (data != NULL) {
+    NSUInteger bytesPerRow;
+    if (tex->type == NVG_TEXTURE_RGBA) {
+      bytesPerRow = width * 4;
+    } else {
+      bytesPerRow = width;
+    }
+
+    [tex->tex replaceRegion:MTLRegionMake2D(0, 0, width, height)
+                mipmapLevel:0
+                  withBytes:data
+                bytesPerRow:bytesPerRow];
+
+    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
+      @autoreleasepool {
+        id<MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
+        id<MTLBlitCommandEncoder> encoder = [commandBuffer blitCommandEncoder];
+        [encoder generateMipmapsForTexture:tex->tex];
+        [encoder endEncoding];
+        [commandBuffer commit];
+        [commandBuffer waitUntilCompleted];
+      }
+    }
+  }
+
+  MTLSamplerDescriptor* samplerDescriptor = [MTLSamplerDescriptor new];
+  if (imageFlags & NVG_IMAGE_NEAREST) {
+    samplerDescriptor.minFilter = MTLSamplerMinMagFilterNearest;
+    samplerDescriptor.magFilter = MTLSamplerMinMagFilterNearest;
+    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
+      samplerDescriptor.mipFilter = MTLSamplerMipFilterNearest;
+  } else {
+    samplerDescriptor.minFilter = MTLSamplerMinMagFilterLinear;
+    samplerDescriptor.magFilter = MTLSamplerMinMagFilterLinear;
+    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
+      samplerDescriptor.mipFilter = MTLSamplerMipFilterLinear;
+  }
+
+  if (imageFlags & NVG_IMAGE_REPEATX) {
+    samplerDescriptor.sAddressMode = MTLSamplerAddressModeRepeat;
+  } else {
+    samplerDescriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
+  }
+
+  if (imageFlags & NVG_IMAGE_REPEATY) {
+    samplerDescriptor.tAddressMode = MTLSamplerAddressModeRepeat;
+  } else {
+    samplerDescriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
+  }
+
+  tex->sampler = [mtl->metalLayer.device
+      newSamplerStateWithDescriptor:samplerDescriptor];
+  [samplerDescriptor release];
+
+  return tex->id;
+}
+
 static int mtlnvg__renderCreate(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
 
@@ -826,6 +917,14 @@ static int mtlnvg__renderCreate(void* uptr) {
   mtl->pseudoSampler = [mtl->metalLayer.device
       newSamplerStateWithDescriptor:samplerDescriptor];
   [samplerDescriptor release];
+
+  // Initializes pseudo texture for macOS.
+#if TARGET_OS_OSX == 1
+  const int kPseudoTextureImage = mtlnvg__renderCreateTexture(
+      mtl, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
+  MNVGtexture* tex = mtlnvg__findTexture(mtl, kPseudoTextureImage);
+  mtl->pseudoTexture = tex->tex;
+#endif
 
   // Initializes default blend states.
   mtl->blendFunc.srcRGB = MTLBlendFactorOne;
@@ -921,88 +1020,6 @@ static int mtlnvg__renderCreate(void* uptr) {
   [stencilDescriptor release];
 
   return 1;
-}
-
-static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
-                                       int height, int imageFlags,
-                                       const unsigned char* data) {
-  MNVGcontext* mtl = (MNVGcontext*)uptr;
-  MNVGtexture* tex = mtlnvg__allocTexture(mtl);
-
-  if (tex == NULL) return 0;
-
-  MTLPixelFormat pixelFormat = MTLPixelFormatRGBA8Unorm;
-  if (type == NVG_TEXTURE_ALPHA) {
-    pixelFormat = MTLPixelFormatR8Unorm;
-  }
-
-  tex->type = type;
-  tex->flags = imageFlags;
-
-  MTLTextureDescriptor *textureDescriptor = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:pixelFormat
-      width:width
-      height:height
-      mipmapped:(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS ? YES : NO)];
-  textureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
-  tex->tex = [mtl->metalLayer.device
-      newTextureWithDescriptor:textureDescriptor];
-
-  if (data != NULL) {
-    NSUInteger bytesPerRow;
-    if (tex->type == NVG_TEXTURE_RGBA) {
-      bytesPerRow = width * 4;
-    } else {
-      bytesPerRow = width;
-    }
-
-    [tex->tex replaceRegion:MTLRegionMake2D(0, 0, width, height)
-                mipmapLevel:0
-                  withBytes:data
-                bytesPerRow:bytesPerRow];
-
-    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
-      @autoreleasepool {
-        id<MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
-        id<MTLBlitCommandEncoder> encoder = [commandBuffer blitCommandEncoder];
-        [encoder generateMipmapsForTexture:tex->tex];
-        [encoder endEncoding];
-        [commandBuffer commit];
-        [commandBuffer waitUntilCompleted];
-      }
-    }
-  }
-
-  MTLSamplerDescriptor* samplerDescriptor = [MTLSamplerDescriptor new];
-  if (imageFlags & NVG_IMAGE_NEAREST) {
-    samplerDescriptor.minFilter = MTLSamplerMinMagFilterNearest;
-    samplerDescriptor.magFilter = MTLSamplerMinMagFilterNearest;
-    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
-      samplerDescriptor.mipFilter = MTLSamplerMipFilterNearest;
-  } else {
-    samplerDescriptor.minFilter = MTLSamplerMinMagFilterLinear;
-    samplerDescriptor.magFilter = MTLSamplerMinMagFilterLinear;
-    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
-      samplerDescriptor.mipFilter = MTLSamplerMipFilterLinear;
-  }
-
-  if (imageFlags & NVG_IMAGE_REPEATX) {
-    samplerDescriptor.sAddressMode = MTLSamplerAddressModeRepeat;
-  } else {
-    samplerDescriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
-  }
-
-  if (imageFlags & NVG_IMAGE_REPEATY) {
-    samplerDescriptor.tAddressMode = MTLSamplerAddressModeRepeat;
-  } else {
-    samplerDescriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
-  }
-
-  tex->sampler = [mtl->metalLayer.device
-      newSamplerStateWithDescriptor:samplerDescriptor];
-  [samplerDescriptor release];
-
-  return tex->id;
 }
 
 static void mtlnvg__renderDelete(void* uptr) {
@@ -1156,6 +1173,9 @@ static void mtlnvg__renderFlush(void* uptr) {
     [buffers->commandBuffer enqueue];
     [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
         buffers->isBusy = NO;
+#if TARGET_OS_OSX == 1
+        [buffers->commandBuffer release];
+#endif
         buffers->commandBuffer = nil;
         buffers->image = 0;
         buffers->nindexes = 0;
@@ -1410,7 +1430,11 @@ NVGcontext* nvgCreateMTL(void* metalLayer, int flags) {
   params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
 
   mtl->flags = flags;
+#if TARGET_OS_OSX == 1
+  mtl->fragSize = 256;
+#else
   mtl->fragSize = sizeof(MNVGfragUniforms);
+#endif
   mtl->indexSize = 4;  // MTLIndexTypeUInt32
   mtl->metalLayer = (__bridge CAMetalLayer*)metalLayer;
 
