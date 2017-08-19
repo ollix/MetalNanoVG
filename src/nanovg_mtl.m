@@ -888,8 +888,14 @@ static int mtlnvg__renderCreate(void* uptr) {
 
   mtl->commandQueue = [device newCommandQueue];
 
-  // Initializes triple buffers.
-  mtl->maxBuffers = mtl->flags & NVG_TRIPLE_BUFFERING ? 3 : 1;
+  // Initializes the number of available buffers.
+  if (mtl->flags & NVG_TRIPLE_BUFFER) {
+    mtl->maxBuffers = 3;
+  } else if (mtl->flags & NVG_DOUBLE_BUFFER) {
+    mtl->maxBuffers = 2;
+  } else {
+    mtl->maxBuffers = 1;
+  }
   const int kBufferSize = sizeof(MNVGbuffers) * mtl->maxBuffers;
   mtl->cbuffers = malloc(kBufferSize);
   memset(mtl->cbuffers, 0, kBufferSize);
