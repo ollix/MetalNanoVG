@@ -1253,8 +1253,8 @@ static int mtlnvg__renderGetTextureSize(void* uptr, int image, int* w, int* h) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
   MNVGtexture* tex = mtlnvg__findTexture(mtl, image);
   if (tex == NULL) return 0;
-  *w = tex->tex.width;
-  *h = tex->tex.height;
+  *w = (int)tex->tex.width;
+  *h = (int)tex->tex.height;
   return 1;
 }
 
