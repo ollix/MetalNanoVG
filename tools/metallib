@@ -31,16 +31,78 @@ cd $DIR/../src
 
 result=true
 
-for sdk in "iphoneos" "macosx" "appletvos"; do
-  xcrun --sdk $sdk metal nanovg_mtl_shaders.metal -o nanovg_mtl_$sdk.air
-  if [ $? -ne 0 ]; then
-    result=false
-    break
+METAL_VERSIONS=( "1.0" "1.1" "1.2" "2.0" )
+PREFIX="mnvg_bitcode"
+
+mkdir $PREFIX
+
+execute_cmd() {
+  SDK=$1
+  TARGET=$2
+  VERSION=$3
+
+  SUFFIX=""
+  CMD="xcrun -sdk $SDK metal nanovg_mtl_shaders.metal"
+  if [ "$VERSION" != "" ]; then
+    echo " - Ver: $VERSION"
+    CMD="$CMD -std=$TARGET-metal$VERSION"
+    SUFFIX="_${VERSION//./_}"
   fi
-  xcrun --sdk $sdk metallib nanovg_mtl_$sdk.air -o nanovg_mtl_library \
+
+  #xcrun -sdk iphoneos metal nanovg_mtl_shaders.metal -std=ios-metal2.0 -o nanovg_mtl_iphoneos_2_0.air
+  AIR_FILE_NAME="$PREFIX/$TARGET$SUFFIX.air"
+  HEADER_NAME="$PREFIX/$TARGET$SUFFIX.h"
+  VARIABLE_NAME="$PREFIX/$TARGET$SUFFIX"
+
+  if [ $SDK = "iphoneos" ]; then
+    CMD="$CMD -mios-version-min=8.0"
+  elif [ $SDK = "macosx" ]; then
+    CMD="$CMD -mmacosx-version-min=10.11"
+  fi
+
+  CMD="$CMD -o $AIR_FILE_NAME"
+  eval $CMD
+
+  if [ $? -ne 0 ]; then
+    return 1
+  fi
+  xcrun -sdk $SDK metallib $AIR_FILE_NAME -o $VARIABLE_NAME \
       > /dev/null 2>&1
-  xxd -i nanovg_mtl_library > nanovg_mtl_library_$sdk.h
-  rm nanovg_mtl_$sdk.air nanovg_mtl_library
+  xxd -i $VARIABLE_NAME > $HEADER_NAME
+  rm $AIR_FILE_NAME $VARIABLE_NAME
+  return 0
+}
+
+for SDK in "iphoneos" "macosx" "appletvos"; do
+  TARGET=""
+
+  if [ $SDK = "appletvos" ]; then
+    echo "* Compiling for tvOS..."
+    TARGET="tvos"
+    execute_cmd $SDK $TARGET
+    if [ $? -ne 0 ]; then
+      result=false
+      break
+    fi
+  else
+    if [ $SDK = "iphoneos" ]; then
+      echo "* Compiling for iOS..."
+      TARGET="ios"
+      VERSIONS=( "${METAL_VERSIONS[@]}" )
+    elif [ $SDK = "macosx" ]; then
+      echo "* Compiling for macOS..."
+      TARGET="osx"
+      VERSIONS=( "${METAL_VERSIONS[@]:1}" )
+    fi
+
+    for VERSION in "${VERSIONS[@]}"; do
+      execute_cmd $SDK $TARGET $VERSION
+      if [ $? -ne 0 ]; then
+        result=false
+        break
+      fi
+    done
+  fi
 done
 
 if $result; then
