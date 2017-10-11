@@ -648,11 +648,13 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
   [mtl->renderEncoder setCullMode:MTLCullModeNone];
   [mtl->renderEncoder setDepthStencilState:mtl->fillShapeStencilState];
   [mtl->renderEncoder setRenderPipelineState:mtl->stencilOnlyPipelineState];
-  [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                                 indexCount:call->indexCount
-                                  indexType:MTLIndexTypeUInt32
-                                indexBuffer:mtl->buffers->indexBuffer
-                          indexBufferOffset:kIndexBufferOffset];
+  if (call->indexCount > 0) {
+    [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                                   indexCount:call->indexCount
+                                    indexType:MTLIndexTypeUInt32
+                                  indexBuffer:mtl->buffers->indexBuffer
+                            indexBufferOffset:kIndexBufferOffset];
+  }
 
   // Restores states.
   [mtl->renderEncoder setCullMode:MTLCullModeBack];
@@ -685,11 +687,13 @@ static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
   const int kIndexBufferOffset = call->indexOffset * mtl->indexSize;
   mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
   [mtl->renderEncoder setRenderPipelineState:mtl->pipelineState];
-  [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                                 indexCount:call->indexCount
-                                  indexType:MTLIndexTypeUInt32
-                                indexBuffer:mtl->buffers->indexBuffer
-                          indexBufferOffset:kIndexBufferOffset];
+  if (call->indexCount > 0) {
+    [mtl->renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                                   indexCount:call->indexCount
+                                    indexType:MTLIndexTypeUInt32
+                                  indexBuffer:mtl->buffers->indexBuffer
+                            indexBufferOffset:kIndexBufferOffset];
+  }
 
   // Draw fringes
   if (mtl->flags & NVG_ANTIALIAS) {
@@ -791,7 +795,8 @@ static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
   textureDescriptor.storageMode = MTLStorageModeManaged;
 #endif
   textureDescriptor.usage = MTLTextureUsageShaderRead
-                            | MTLTextureUsageRenderTarget;
+                            | MTLTextureUsageRenderTarget
+                            | MTLTextureUsageShaderWrite;
   tex->tex = [mtl->metalLayer.device
       newTextureWithDescriptor:textureDescriptor];
 

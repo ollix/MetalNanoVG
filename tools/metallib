@@ -74,8 +74,6 @@ execute_cmd() {
 }
 
 for SDK in "iphoneos" "macosx" "appletvos"; do
-  TARGET=""
-
   if [ $SDK = "appletvos" ]; then
     echo "* Compiling for tvOS..."
     TARGET="tvos"
