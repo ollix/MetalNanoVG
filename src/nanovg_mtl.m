@@ -1236,9 +1236,6 @@ static void mtlnvg__renderFlush(void* uptr) {
     [buffers->commandBuffer enqueue];
     [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
         buffers->isBusy = NO;
-#if TARGET_OS_OSX == 1
-        [buffers->commandBuffer release];
-#endif
         buffers->commandBuffer = nil;
         buffers->image = 0;
         buffers->nindexes = 0;
