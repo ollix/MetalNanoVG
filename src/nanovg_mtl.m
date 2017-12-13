@@ -199,12 +199,6 @@ typedef struct MNVGcontext MNVGcontext;
 const MTLResourceOptions kMetalBufferOptions = \
     (MTLResourceCPUCacheModeWriteCombined | MTLResourceStorageModeShared);
 
-// The color used to clear the color texture.
-MTLClearColor s_colorBufferClearColor;
-
-// The action performed at the sart of a color rendering pass.
-MTLLoadAction s_colorBufferLoadAction = MTLLoadActionClear;
-
 // Keeps the weak reference to the currently binded framebuffer.
 MNVGframebuffer* s_framebuffer = NULL;
 
@@ -1543,7 +1537,7 @@ void mnvgClearColor (NVGcontext* ctx, NVGcolor color) {
   MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   float alpha = (float)color.a;
   mtl->clearColor = MTLClearColorMake((float)color.r * alpha,
-									  (float)color.g * alpha,
+                                      (float)color.g * alpha,
                                       (float)color.b * alpha,
                                       (float)color.a);
 }
