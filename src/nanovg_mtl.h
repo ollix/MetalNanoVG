@@ -85,10 +85,8 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 // Metal bridging functions
 //
 
-// Clears the color buffer with the specified `color` for the next render pass.
-// This function simulates the combination of `glClearColor()` and `glClear()`
-// of the OpenGL backend.
-void mnvgClearWithColor(NVGcolor color);
+// Set the clear color used for every frame
+void mnvgClearColor(NVGcontext* ctx, NVGcolor color);
 
 // Returns a pointer to the corresponded `id<MTLCommandQueue>` object.
 void* mnvgCommandQueue(NVGcontext* ctx);
