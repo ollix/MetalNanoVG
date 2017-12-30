@@ -85,8 +85,8 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 // Metal bridging functions
 //
 
-// Set the clear color used for every frame
-void mnvgClearColor(NVGcontext* ctx, NVGcolor color);
+// Clear context on next frame, must be called before nvgEndFrame
+void mnvgClearWithColor(NVGcontext* ctx, NVGcolor color);
 
 // Returns a pointer to the corresponded `id<MTLCommandQueue>` object.
 void* mnvgCommandQueue(NVGcontext* ctx);

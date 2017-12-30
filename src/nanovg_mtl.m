@@ -163,6 +163,7 @@ struct MNVGcontext {
   int flags;
   vector_uint2 viewPortSize;
   MTLClearColor clearColor;
+  BOOL clearBufferOnFlush;
 
   // Textures
   MNVGtexture* textures;
@@ -498,9 +499,11 @@ static id<MTLRenderCommandEncoder> mtlnvg__renderCommandEncoder(
   MTLRenderPassDescriptor *descriptor = \
       [MTLRenderPassDescriptor renderPassDescriptor];
   descriptor.colorAttachments[0].clearColor = mtl->clearColor;
-  descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+  descriptor.colorAttachments[0].loadAction = \
+      mtl->clearBufferOnFlush ? MTLLoadActionClear : MTLLoadActionLoad;
   descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
   descriptor.colorAttachments[0].texture = colorTexture;
+  mtl->clearBufferOnFlush = NO;
 
   descriptor.stencilAttachment.clearStencil = 0;
   descriptor.stencilAttachment.loadAction = MTLLoadActionClear;
@@ -1076,6 +1079,8 @@ static int mtlnvg__renderCreate(void* uptr) {
   [backFaceStencilDescriptor release];
   [stencilDescriptor release];
 
+  mtl->clearBufferOnFlush = NO;
+
   return 1;
 }
 
@@ -1533,13 +1538,14 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer) {
   free(framebuffer);
 }
 
-void mnvgClearColor (NVGcontext* ctx, NVGcolor color) {
+void mnvgClearWithColor (NVGcontext* ctx, NVGcolor color) {
   MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   float alpha = (float)color.a;
   mtl->clearColor = MTLClearColorMake((float)color.r * alpha,
                                       (float)color.g * alpha,
                                       (float)color.b * alpha,
                                       (float)color.a);
+  mtl->clearBufferOnFlush = YES;
 }
 
 void* mnvgCommandQueue(NVGcontext* ctx) {
