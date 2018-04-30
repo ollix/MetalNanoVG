@@ -1440,7 +1440,7 @@ static int mtlnvg__renderUpdateTexture(void* uptr, int image, int x, int y,
   return 1;
 }
 
-static void mtlnvg__renderViewport(void* uptr, int width, int height,
+static void mtlnvg__renderViewport(void* uptr, float width, float height,
                                    float devicePixelRatio) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
   mtl->viewPortSize = (vector_uint2){width * devicePixelRatio,
