@@ -939,6 +939,7 @@ static int mtlnvg__renderCreate(void* uptr) {
   } else {
     mtl->fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
   }
+  [library release];
 
   mtl->commandQueue = [device newCommandQueue];
 
