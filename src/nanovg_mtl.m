@@ -693,8 +693,8 @@ static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
   }
 
   // Draw fringes
-  if (mtl->flags & NVG_ANTIALIAS) {
-    for (i = 0; i < npaths; i++) {
+  for (i = 0; i < npaths; i++) {
+    if (paths[i].strokeCount > 0) {
       [mtl->renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                              vertexStart:paths[i].strokeOffset
                              vertexCount:paths[i].strokeCount];
