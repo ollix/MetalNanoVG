@@ -861,6 +861,9 @@ static int mtlnvg__renderCreate(void* uptr) {
     mtl->metalLayer.device = MTLCreateSystemDefaultDevice();
   }
   mtl->metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+#if TARGET_OS_OSX == 1
+  mtl->metalLayer.opaque = NO;
+#endif
 
   // Loads shaders from pre-compiled metal library..
   NSError* error;
