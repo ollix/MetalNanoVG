@@ -860,7 +860,9 @@ static int mtlnvg__renderCreate(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
 
   if (mtl->metalLayer.device == nil) {
-    mtl->metalLayer.device = MTLCreateSystemDefaultDevice();
+    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    mtl->metalLayer.device = device;
+    [device release];
   }
   mtl->metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 #if TARGET_OS_OSX == 1
