@@ -41,12 +41,14 @@
 #  include "mnvg_bitcode/ios_1_1.h"
 #  include "mnvg_bitcode/ios_1_2.h"
 #  include "mnvg_bitcode/ios_2_0.h"
+#  include "mnvg_bitcode/ios_2_1.h"
 #elif TARGET_OS_TV == 1
 #  include "mnvg_bitcode/tvos.h"
 #elif TARGET_OS_OSX == 1
-#  include "mnvg_bitcode/osx_1_1.h"
-#  include "mnvg_bitcode/osx_1_2.h"
-#  include "mnvg_bitcode/osx_2_0.h"
+#  include "mnvg_bitcode/macos_1_1.h"
+#  include "mnvg_bitcode/macos_1_2.h"
+#  include "mnvg_bitcode/macos_2_0.h"
+#  include "mnvg_bitcode/macos_2_1.h"
 #else
 #  define MNVG_INVALID_TARGET
 #endif
@@ -892,9 +894,12 @@ static int mtlnvg__renderCreate(void* uptr) {
   } else if (os_version.majorVersion == 10) {
     metal_library_bitcode = mnvg_bitcode_ios_1_2;
     metal_library_bitcode_len = mnvg_bitcode_ios_1_2_len;
-  } else {
+  } else if (os_version.majorVersion == 11) {
     metal_library_bitcode = mnvg_bitcode_ios_2_0;
     metal_library_bitcode_len = mnvg_bitcode_ios_2_0_len;
+  } else {
+    metal_library_bitcode = mnvg_bitcode_ios_2_1;
+    metal_library_bitcode_len = mnvg_bitcode_ios_2_1_len;
   }
 #elif TARGET_OS_TV == 1
   metal_library_bitcode = mnvg_bitcode_tvos;
@@ -907,14 +912,17 @@ static int mtlnvg__renderCreate(void* uptr) {
     return 0;
   }
   if (os_version.minorVersion == 11) {
-    metal_library_bitcode = mnvg_bitcode_osx_1_1;
-    metal_library_bitcode_len = mnvg_bitcode_osx_1_1_len;
+    metal_library_bitcode = mnvg_bitcode_macos_1_1;
+    metal_library_bitcode_len = mnvg_bitcode_macos_1_1_len;
   } else if (os_version.minorVersion == 12) {
-    metal_library_bitcode = mnvg_bitcode_osx_1_2;
-    metal_library_bitcode_len = mnvg_bitcode_osx_1_2_len;
+    metal_library_bitcode = mnvg_bitcode_macos_1_2;
+    metal_library_bitcode_len = mnvg_bitcode_macos_1_2_len;
+  } else if (os_version.minorVersion == 13) {
+    metal_library_bitcode = mnvg_bitcode_macos_1_2;
+    metal_library_bitcode_len = mnvg_bitcode_macos_2_0_len;
   } else {
-    metal_library_bitcode = mnvg_bitcode_osx_2_0;
-    metal_library_bitcode_len = mnvg_bitcode_osx_2_0_len;
+    metal_library_bitcode = mnvg_bitcode_macos_2_0;
+    metal_library_bitcode_len = mnvg_bitcode_macos_2_1_len;
   }
   creates_pseudo_texture = true;
 #endif
