@@ -1100,6 +1100,7 @@ static int mtlnvg__renderCreate(void* uptr) {
 
 static void mtlnvg__renderDelete(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
+  dispatch_release(mtl->semaphore);
 
   [mtl->commandQueue release];
   [mtl->defaultStencilState release];
@@ -1112,11 +1113,14 @@ static void mtlnvg__renderDelete(void* uptr) {
   [mtl->strokeShapeStencilState release];
   [mtl->strokeAntiAliasStencilState release];
   [mtl->strokeClearStencilState release];
+  [mtl->pipelineState release];
+  [mtl->stencilOnlyPipelineState release];
+  [mtl->pseudoSampler release];
 
   for (int i = 0; i < mtl->maxBuffers; ++i) {
     MNVGbuffers* buffers = &(mtl->cbuffers[i]);
-    if (buffers->stencilTexture != nil)
-      [buffers->stencilTexture release];
+    [buffers->viewSizeBuffer release];
+    [buffers->stencilTexture release];
     [buffers->indexBuffer release];
     [buffers->vertBuffer release];
     [buffers->uniformBuffer release];
@@ -1124,6 +1128,20 @@ static void mtlnvg__renderDelete(void* uptr) {
     free(buffers->calls);
   }
   free(mtl->cbuffers);
+
+  for (int i = 0; i < mtl->ntextures; i++) {
+    if (mtl->textures[i].tex != nil &&
+        (mtl->textures[i].flags & NVG_IMAGE_NODELETE) == 0) {
+      [mtl->textures[i].tex release];
+      [mtl->textures[i].sampler release];
+    }
+  }
+  free(mtl->textures);
+
+  [mtl->metalLayer.device release];
+  mtl->metalLayer.device = nil;
+  mtl->metalLayer = nil;
+  free(mtl);
 }
 
 static int mtlnvg__renderDeleteTexture(void* uptr, int image) {
@@ -1237,15 +1255,16 @@ error:
 static void mtlnvg__renderFlush(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
   MNVGbuffers* buffers = mtl->buffers;
-  id<MTLTexture> colorTexture = nil;;
-  id<CAMetalDrawable> drawable = nil;
-  vector_uint2 textureSize;
 
   mtl->metalLayer.drawableSize = CGSizeMake(mtl->viewPortSize.x,
                                             mtl->viewPortSize.y);
 
-  buffers->commandBuffer = [mtl->commandQueue commandBuffer];
   @autoreleasepool {
+    id <MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
+    id<MTLTexture> colorTexture = nil;;
+    vector_uint2 textureSize;
+
+    buffers->commandBuffer = commandBuffer;
     [buffers->commandBuffer enqueue];
     [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
         buffers->isBusy = NO;
@@ -1272,7 +1291,7 @@ static void mtlnvg__renderFlush(void* uptr) {
     if (textureSize.x == 0 || textureSize.y == 0) return;
     mtlnvg__updateStencilTexture(mtl, &textureSize);
 
-
+    id<CAMetalDrawable> drawable = nil;
     if (colorTexture == nil) {
       drawable = mtl->metalLayer.nextDrawable;
       colorTexture = drawable.texture;
