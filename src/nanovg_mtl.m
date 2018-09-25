@@ -1319,7 +1319,6 @@ static void mtlnvg__renderFlush(void* uptr) {
     mtl->renderEncoder = nil;
     if (drawable) {
       [buffers->commandBuffer presentDrawable:drawable];
-      drawable = nil;
     }
     [buffers->commandBuffer commit];
   }  // @autoreleasepool
