@@ -1255,16 +1255,15 @@ error:
 static void mtlnvg__renderFlush(void* uptr) {
   MNVGcontext* mtl = (MNVGcontext*)uptr;
   MNVGbuffers* buffers = mtl->buffers;
+  id <MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
+  id<MTLTexture> colorTexture = nil;;
+  vector_uint2 textureSize;
 
   mtl->metalLayer.drawableSize = CGSizeMake(mtl->viewPortSize.x,
                                             mtl->viewPortSize.y);
 
+  buffers->commandBuffer = commandBuffer;
   @autoreleasepool {
-    id <MTLCommandBuffer> commandBuffer = [mtl->commandQueue commandBuffer];
-    id<MTLTexture> colorTexture = nil;;
-    vector_uint2 textureSize;
-
-    buffers->commandBuffer = commandBuffer;
     [buffers->commandBuffer enqueue];
     [buffers->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
         buffers->isBusy = NO;
