@@ -920,11 +920,11 @@ static int mtlnvg__renderCreate(void* uptr) {
     metal_library_bitcode = mnvg_bitcode_macos_1_2;
     metal_library_bitcode_len = mnvg_bitcode_macos_1_2_len;
   } else if (os_version.minorVersion == 13) {
-    metal_library_bitcode = mnvg_bitcode_macos_1_2;
-    metal_library_bitcode_len = mnvg_bitcode_macos_1_2_len;
-  } else {
     metal_library_bitcode = mnvg_bitcode_macos_2_0;
     metal_library_bitcode_len = mnvg_bitcode_macos_2_0_len;
+  } else {
+    metal_library_bitcode = mnvg_bitcode_macos_2_1;
+    metal_library_bitcode_len = mnvg_bitcode_macos_2_1_len;
   }
   creates_pseudo_texture = true;
 #endif
