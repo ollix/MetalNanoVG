@@ -744,11 +744,14 @@ static void mtlnvg__triangles(MNVGcontext* mtl, MNVGcall* call) {
 static void mtlnvg__renderCancel(void* uptr) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
   MNVGbuffers* buffers = mtl.buffers;
+  buffers.image = 0;
+  buffers.isBusy = NO;
   buffers.nindexes = 0;
   buffers.nverts = 0;
   buffers.npaths = 0;
   buffers.ncalls = 0;
   buffers.nuniforms = 0;
+  dispatch_semaphore_signal(mtl.semaphore);
 }
 
 static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
@@ -939,10 +942,8 @@ static int mtlnvg__renderCreate(void* uptr) {
   for (int i = 0; i < mtl.maxBuffers; ++i) {
     [mtl.cbuffers addObject:[MNVGbuffers new]];
   }
-  mtl.buffers = [mtl.cbuffers objectAtIndex:0];
-  mtl.buffers.isBusy = YES;
   mtl.clearBufferOnFlush = NO;
-  mtl.semaphore = dispatch_semaphore_create(mtl.maxBuffers - 1);
+  mtl.semaphore = dispatch_semaphore_create(mtl.maxBuffers);
 
   // Initializes vertex descriptor.
   mtl.vertexDescriptor = [MTLVertexDescriptor vertexDescriptor];
@@ -1220,8 +1221,9 @@ error:
 
 static void mtlnvg__renderFlush(void* uptr) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
-  // Skips if the drawable is invisible.
+  // Cancelled if the drawable is invisible.
   if (mtl.viewPortSize.x == 0 || mtl.viewPortSize.y == 0) {
+    mtlnvg__renderCancel(uptr);
     return;
   }
 
@@ -1290,15 +1292,6 @@ static void mtlnvg__renderFlush(void* uptr) {
     [buffers.commandBuffer presentDrawable:drawable];
   }
   [buffers.commandBuffer commit];
-
-  dispatch_semaphore_wait(mtl.semaphore, DISPATCH_TIME_FOREVER);
-  for (MNVGbuffers* buffers in mtl.cbuffers) {
-    if (!buffers.isBusy) {
-      buffers.isBusy = YES;
-      mtl.buffers = buffers;
-      break;
-    }
-  }
 }
 
 static int mtlnvg__renderGetTextureSize(void* uptr, int image, int* w, int* h) {
@@ -1444,6 +1437,15 @@ static void mtlnvg__renderViewport(void* uptr, float width, float height,
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
   mtl.viewPortSize = (vector_uint2){width * devicePixelRatio,
                                     height * devicePixelRatio};
+
+  dispatch_semaphore_wait(mtl.semaphore, DISPATCH_TIME_FOREVER);
+  for (MNVGbuffers* buffers in mtl.cbuffers) {
+    if (!buffers.isBusy) {
+      buffers.isBusy = YES;
+      mtl.buffers = buffers;
+      break;
+    }
+  }
 
   // Initializes view size buffer for vertex function.
   if (mtl.buffers.viewSizeBuffer == nil) {
