@@ -920,12 +920,7 @@ static int mtlnvg__renderCreate(void* uptr) {
 
   mtl.vertexFunction = [library newFunctionWithName:@"vertexShader"];
   if (mtl.flags & NVG_ANTIALIAS) {
-    if (mtl.flags & NVG_STENCIL_STROKES) {
-      mtl.fragmentFunction = \
-          [library newFunctionWithName:@"fragmentShaderStencilStrokesAA"];
-    } else {
-      mtl.fragmentFunction = [library newFunctionWithName:@"fragmentShaderAA"];
-    }
+    mtl.fragmentFunction = [library newFunctionWithName:@"fragmentShaderAA"];
   } else {
     mtl.fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
   }
