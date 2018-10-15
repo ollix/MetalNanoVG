@@ -634,10 +634,10 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
   [mtl.renderEncoder setRenderPipelineState:mtl.stencilOnlyPipelineState];
   if (call->indexCount > 0) {
     [mtl.renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                                   indexCount:call->indexCount
-                                    indexType:MTLIndexTypeUInt32
-                                  indexBuffer:mtl.buffers.indexBuffer
-                            indexBufferOffset:kIndexBufferOffset];
+                                  indexCount:call->indexCount
+                                   indexType:MTLIndexTypeUInt32
+                                 indexBuffer:mtl.buffers.indexBuffer
+                           indexBufferOffset:kIndexBufferOffset];
   }
 
   // Restores states.
@@ -650,17 +650,16 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
     [mtl.renderEncoder setDepthStencilState:mtl.fillAntiAliasStencilState];
     for (i = 0; i < npaths; i++) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
   }
 
   // Draws fill.
   [mtl.renderEncoder setDepthStencilState:mtl.fillStencilState];
   [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                         vertexStart:call->triangleOffset
-                         vertexCount:call->triangleCount];
-
+                        vertexStart:call->triangleOffset
+                        vertexCount:call->triangleCount];
   [mtl.renderEncoder setDepthStencilState:mtl.defaultStencilState];
 }
 
@@ -673,18 +672,18 @@ static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
   [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
   if (call->indexCount > 0) {
     [mtl.renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                                   indexCount:call->indexCount
-                                    indexType:MTLIndexTypeUInt32
-                                  indexBuffer:mtl.buffers.indexBuffer
-                            indexBufferOffset:kIndexBufferOffset];
+                                  indexCount:call->indexCount
+                                   indexType:MTLIndexTypeUInt32
+                                 indexBuffer:mtl.buffers.indexBuffer
+                           indexBufferOffset:kIndexBufferOffset];
   }
 
   // Draw fringes
   for (i = 0; i < npaths; i++) {
     if (paths[i].strokeCount > 0) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
   }
 }
@@ -700,8 +699,8 @@ static void mtlnvg__stroke(MNVGcontext* mtl, MNVGcall* call) {
     [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
     for (i = 0; i < npaths; i++) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
 
     // Draws anti-aliased fragments.
@@ -709,8 +708,8 @@ static void mtlnvg__stroke(MNVGcontext* mtl, MNVGcall* call) {
     [mtl.renderEncoder setDepthStencilState:mtl.strokeAntiAliasStencilState];
     for (i = 0; i < npaths; i++) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
 
     // Clears stencil buffer.
@@ -718,10 +717,9 @@ static void mtlnvg__stroke(MNVGcontext* mtl, MNVGcall* call) {
     [mtl.renderEncoder setRenderPipelineState:mtl.stencilOnlyPipelineState];
     for (i = 0; i < npaths; i++) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
-
     [mtl.renderEncoder setDepthStencilState:mtl.defaultStencilState];
   } else {
     // Draws strokes.
@@ -729,8 +727,8 @@ static void mtlnvg__stroke(MNVGcontext* mtl, MNVGcall* call) {
     [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
     for (i = 0; i < npaths; i++) {
       [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                             vertexStart:paths[i].strokeOffset
-                             vertexCount:paths[i].strokeCount];
+                            vertexStart:paths[i].strokeOffset
+                            vertexCount:paths[i].strokeCount];
     }
   }
 }
@@ -739,8 +737,8 @@ static void mtlnvg__triangles(MNVGcontext* mtl, MNVGcall* call) {
   mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
   [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
   [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle
-                         vertexStart:call->triangleOffset
-                         vertexCount:call->triangleCount];
+                        vertexStart:call->triangleOffset
+                        vertexCount:call->triangleCount];
 }
 
 static void mtlnvg__renderCancel(void* uptr) {
@@ -1268,8 +1266,8 @@ static void mtlnvg__renderFlush(void* uptr) {
     colorTexture = drawable.texture;
   }
   mtl.renderEncoder = mtlnvg__renderCommandEncoder(mtl,
-                                                    buffers.commandBuffer,
-                                                    colorTexture);
+                                                   buffers.commandBuffer,
+                                                   colorTexture);
   for (int i = 0; i < buffers.ncalls; i++) {
     MNVGcall* call = &buffers.calls[i];
 
