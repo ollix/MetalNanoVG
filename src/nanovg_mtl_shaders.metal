@@ -190,7 +190,7 @@ fragment float4 fragmentShaderStencilStrokesAA(
 
   float strokeAlpha = strokeMask(uniforms, in.ftcoord);
   if (strokeAlpha < uniforms.strokeThr) {
-    discard_fragment();
+    return float4(0);
   }
 
   if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD
