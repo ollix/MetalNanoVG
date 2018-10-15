@@ -1225,6 +1225,11 @@ error:
 
 static void mtlnvg__renderFlush(void* uptr) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
+  // Skips if the drawable is invisible.
+  if (mtl.viewPortSize.x == 0 || mtl.viewPortSize.y == 0) {
+    return;
+  }
+
   __weak MNVGbuffers* buffers = mtl.buffers;
   id <MTLCommandBuffer> commandBuffer = [mtl.commandQueue commandBuffer];
   id<MTLTexture> colorTexture = nil;;
