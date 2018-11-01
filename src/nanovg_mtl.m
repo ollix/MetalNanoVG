@@ -89,18 +89,12 @@ struct MNVGcall {
   int triangleCount;
   int indexOffset;
   int indexCount;
+  int strokeOffset;
+  int strokeCount;
   int uniformOffset;
   MNVGblend blendFunc;
 };
 typedef struct MNVGcall MNVGcall;
-
-struct MNVGpath {
-  int fillOffset;
-  int fillCount;
-  int strokeOffset;
-  int strokeCount;
-};
-typedef struct MNVGpath MNVGpath;
 
 @interface MNVGtexture : NSObject
 @property (nonatomic, assign) int id;
@@ -139,9 +133,6 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 @property (nonatomic, assign) MNVGcall* calls;
 @property (nonatomic, assign) int ccalls;
 @property (nonatomic, assign) int ncalls;
-@property (nonatomic, assign) MNVGpath* paths;
-@property (nonatomic, assign) int cpaths;
-@property (nonatomic, assign) int npaths;
 @property (nonatomic, strong) id<MTLBuffer> indexBuffer;
 @property (nonatomic, assign) uint32_t* indexes;
 @property (nonatomic, assign) int cindexes;
@@ -250,23 +241,6 @@ static int mtlnvg__allocFragUniforms(MNVGcontext* mtl, int n) {
   }
   ret = buffers.nuniforms * mtl.fragSize;
   buffers.nuniforms += n;
-  return ret;
-}
-
-static int mtlnvg__allocPaths(MNVGcontext* mtl, int n) {
-  int ret = 0;
-  MNVGbuffers* buffers = mtl.buffers;
-  if (buffers.npaths + n > buffers.cpaths) {
-    MNVGpath* paths;
-    int cpaths = mtlnvg__maxi(buffers.npaths + n, 128) \
-                 + buffers.cpaths / 2;
-    paths = (MNVGpath*)realloc(buffers.paths, sizeof(MNVGpath) * cpaths);
-    if (paths == NULL) return -1;
-    buffers.paths = paths;
-    buffers.cpaths = cpaths;
-  }
-  ret = buffers.npaths;
-  buffers.npaths += n;
   return ret;
 }
 
@@ -473,18 +447,23 @@ static MNVGfragUniforms* mtlnvg__fragUniformPtr(MNVGbuffers* buffers, int i) {
 }
 
 static int mtlnvg__maxVertCount(const NVGpath* paths, int npaths,
-                                int* indexCount) {
-  int i, count = 0;
-  if (indexCount != NULL)
-    *indexCount = 0;
-  for (i = 0; i < npaths; i++) {
-    const int nfill = paths[i].nfill;
+                                int* indexCount, int* strokeCount) {
+  int count = 0;
+  if (indexCount != NULL) *indexCount = 0;
+  if (strokeCount != NULL) *strokeCount = 0;
+  NVGpath* path = (NVGpath*)&paths[0];
+  for (int i = npaths; i--; ++path) {
+    const int nfill = path->nfill;
     if (nfill > 2) {
       count += nfill;
       if (indexCount != NULL)
         *indexCount += (nfill - 2) * 3;
     }
-    count += paths[i].nstroke;
+    if (path->nstroke > 0) {
+      const int nstroke = path->nstroke + 2;
+      count += nstroke;
+      if (strokeCount != NULL) *strokeCount += nstroke;
+    }
   }
   return count;
 }
@@ -624,9 +603,6 @@ static void mtlnvg__vset(NVGvertex* vtx, float x, float y, float u, float v) {
 }
 
 static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
-  MNVGpath* paths = &mtl.buffers.paths[call->pathOffset];
-  int i, npaths = call->pathCount;
-
   // Draws shapes.
   const int kIndexBufferOffset = call->indexOffset * mtl.indexSize;
   [mtl.renderEncoder setCullMode:MTLCullModeNone];
@@ -646,13 +622,11 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
 
   // Draws anti-aliased fragments.
   mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
-  if (mtl.flags & NVG_ANTIALIAS) {
+  if (mtl.flags & NVG_ANTIALIAS && call->strokeCount > 0) {
     [mtl.renderEncoder setDepthStencilState:mtl.fillAntiAliasStencilState];
-    for (i = 0; i < npaths; i++) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
   }
 
   // Draws fill.
@@ -664,9 +638,6 @@ static void mtlnvg__fill(MNVGcontext* mtl, MNVGcall* call) {
 }
 
 static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
-  MNVGpath* paths = &mtl.buffers.paths[call->pathOffset];
-  int i, npaths = call->pathCount;
-
   const int kIndexBufferOffset = call->indexOffset * mtl.indexSize;
   mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
   [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
@@ -679,57 +650,48 @@ static void mtlnvg__convexFill(MNVGcontext* mtl, MNVGcall* call) {
   }
 
   // Draw fringes
-  for (i = 0; i < npaths; i++) {
-    if (paths[i].strokeCount > 0) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+  if (call->strokeCount > 0) {
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
   }
 }
 
 static void mtlnvg__stroke(MNVGcontext* mtl, MNVGcall* call) {
-  MNVGpath* paths = &mtl.buffers.paths[call->pathOffset];
-  int i, npaths = call->pathCount;
+  if (call->strokeCount <= 0) {
+    return;
+  }
 
   if (mtl.flags & NVG_STENCIL_STROKES) {
     // Fills the stroke base without overlap.
     mtlnvg__setUniforms(mtl, call->uniformOffset + mtl.fragSize, call->image);
     [mtl.renderEncoder setDepthStencilState:mtl.strokeShapeStencilState];
     [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
-    for (i = 0; i < npaths; i++) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
 
     // Draws anti-aliased fragments.
     mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
     [mtl.renderEncoder setDepthStencilState:mtl.strokeAntiAliasStencilState];
-    for (i = 0; i < npaths; i++) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
 
     // Clears stencil buffer.
     [mtl.renderEncoder setDepthStencilState:mtl.strokeClearStencilState];
     [mtl.renderEncoder setRenderPipelineState:mtl.stencilOnlyPipelineState];
-    for (i = 0; i < npaths; i++) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
     [mtl.renderEncoder setDepthStencilState:mtl.defaultStencilState];
   } else {
     // Draws strokes.
     mtlnvg__setUniforms(mtl, call->uniformOffset, call->image);
     [mtl.renderEncoder setRenderPipelineState:mtl.pipelineState];
-    for (i = 0; i < npaths; i++) {
-      [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                            vertexStart:paths[i].strokeOffset
-                            vertexCount:paths[i].strokeCount];
-    }
+    [mtl.renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                          vertexStart:call->strokeOffset
+                          vertexCount:call->strokeCount];
   }
 }
 
@@ -748,7 +710,6 @@ static void mtlnvg__renderCancel(void* uptr) {
   buffers.isBusy = NO;
   buffers.nindexes = 0;
   buffers.nverts = 0;
-  buffers.npaths = 0;
   buffers.ncalls = 0;
   buffers.nuniforms = 0;
   dispatch_semaphore_signal(mtl.semaphore);
@@ -939,7 +900,7 @@ static int mtlnvg__renderCreate(void* uptr) {
     mtl.maxBuffers = 1;
   }
   mtl.cbuffers = [NSMutableArray arrayWithCapacity:mtl.maxBuffers];
-  for (int i = 0; i < mtl.maxBuffers; ++i) {
+  for (int i = mtl.maxBuffers; i--;) {
     [mtl.cbuffers addObject:[MNVGbuffers new]];
   }
   mtl.clearBufferOnFlush = NO;
@@ -1080,7 +1041,6 @@ static void mtlnvg__renderDelete(void* uptr) {
     buffers.vertBuffer = nil;
     buffers.uniformBuffer = nil;
     free(buffers.calls);
-    free(buffers.paths);
   }
 
   for (MNVGtexture* texture in mtl.textures) {
@@ -1135,47 +1095,44 @@ static void mtlnvg__renderFill(void* uptr, NVGpaint* paint,
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
   MNVGcall* call = mtlnvg__allocCall(mtl);
   NVGvertex* quad;
-  int i, maxindexes, maxverts, indexOffset, vertOffset, hubVertOffset;
 
   if (call == NULL) return;
 
   call->type = MNVG_FILL;
   call->triangleCount = 4;
-  call->pathOffset = mtlnvg__allocPaths(mtl, npaths);
-  if (call->pathOffset == -1) goto error;
-  call->pathCount = npaths;
   call->image = paint->image;
   call->blendFunc = mtlnvg__blendCompositeOperation(compositeOperation);
 
-  if (npaths == 1 && paths[0].convex)
-  {
+  if (npaths == 1 && paths[0].convex) {
     call->type = MNVG_CONVEXFILL;
     call->triangleCount = 0;  // Bounding box fill quad not needed for convex fill
   }
 
   // Allocate vertices for all the paths.
-  maxverts = mtlnvg__maxVertCount(paths, npaths, &maxindexes)
-             + call->triangleCount;
-  vertOffset = mtlnvg__allocVerts(mtl, maxverts);
+  int indexCount, strokeCount = 0;
+  int maxverts = mtlnvg__maxVertCount(paths, npaths, &indexCount, &strokeCount)
+                 + call->triangleCount;
+  int vertOffset = mtlnvg__allocVerts(mtl, maxverts);
   if (vertOffset == -1) goto error;
 
-  indexOffset = mtlnvg__allocIndexes(mtl, maxindexes);
+  int indexOffset = mtlnvg__allocIndexes(mtl, indexCount);
   if (indexOffset == -1) goto error;
   call->indexOffset = indexOffset;
-  call->indexCount = maxindexes;
+  call->indexCount = indexCount;
   uint32_t* index = &mtl.buffers.indexes[indexOffset];
 
-  for (i = 0; i < npaths; i++) {
-    MNVGpath* copy = &mtl.buffers.paths[call->pathOffset + i];
-    const NVGpath* path = &paths[i];
-    memset(copy, 0, sizeof(MNVGpath));
+  int strokeVertOffset = vertOffset + (maxverts - strokeCount);
+  call->strokeOffset = strokeVertOffset + 1;
+  call->strokeCount = strokeCount - 2;
+  NVGvertex* strokeVert = mtl.buffers.verts + strokeVertOffset;
+
+  NVGpath* path = (NVGpath*)&paths[0];
+  for (int i = npaths; i--; ++path) {
     if (path->nfill > 2) {
-      copy->fillOffset = vertOffset;
-      copy->fillCount = path->nfill;
       memcpy(&mtl.buffers.verts[vertOffset], path->fill,
              sizeof(NVGvertex) * path->nfill);
 
-      hubVertOffset = vertOffset++;
+      int hubVertOffset = vertOffset++;
       for (int j = 2; j < path->nfill; j++) {
         *index++ = hubVertOffset;
         *index++ = vertOffset++;
@@ -1184,11 +1141,12 @@ static void mtlnvg__renderFill(void* uptr, NVGpaint* paint,
       vertOffset++;
     }
     if (path->nstroke > 0) {
-      copy->strokeOffset = vertOffset;
-      copy->strokeCount = path->nstroke;
-      memcpy(&mtl.buffers.verts[vertOffset], path->stroke,
-             sizeof(NVGvertex) * path->nstroke);
-      vertOffset += path->nstroke;
+      memcpy(strokeVert, path->stroke, sizeof(NVGvertex));
+      ++strokeVert;
+      memcpy(strokeVert, path->stroke, sizeof(NVGvertex) * path->nstroke);
+      strokeVert += path->nstroke;
+      memcpy(strokeVert, path->stroke + path->nstroke - 1, sizeof(NVGvertex));
+      ++strokeVert;
     }
   }
 
@@ -1243,7 +1201,6 @@ static void mtlnvg__renderFlush(void* uptr) {
       buffers.image = 0;
       buffers.nindexes = 0;
       buffers.nverts = 0;
-      buffers.npaths = 0;
       buffers.ncalls = 0;
       buffers.nuniforms = 0;
       dispatch_semaphore_signal(mtl.semaphore);
@@ -1270,9 +1227,8 @@ static void mtlnvg__renderFlush(void* uptr) {
   mtl.renderEncoder = mtlnvg__renderCommandEncoder(mtl,
                                                    buffers.commandBuffer,
                                                    colorTexture);
-  for (int i = 0; i < buffers.ncalls; i++) {
-    MNVGcall* call = &buffers.calls[i];
-
+  MNVGcall* call = &buffers.calls[0];
+  for (int i = buffers.ncalls; i--; ++call) {
     MNVGblend* blend = &call->blendFunc;
     mtlnvg__updateRenderPipelineStates(mtl, blend, colorTexture.pixelFormat);
 
@@ -1310,32 +1266,32 @@ static void mtlnvg__renderStroke(void* uptr, NVGpaint* paint,
                                  int npaths) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
   MNVGcall* call = mtlnvg__allocCall(mtl);
-  int i, maxverts, offset;
 
   if (call == NULL) return;
 
   call->type = MNVG_STROKE;
-  call->pathOffset = mtlnvg__allocPaths(mtl, npaths);
-  if (call->pathOffset == -1) goto error;
-  call->pathCount = npaths;
   call->image = paint->image;
   call->blendFunc = mtlnvg__blendCompositeOperation(compositeOperation);
 
   // Allocate vertices for all the paths.
-  maxverts = mtlnvg__maxVertCount(paths, npaths, NULL);
-  offset = mtlnvg__allocVerts(mtl, maxverts);
+  int strokeCount = 0;
+  int maxverts = mtlnvg__maxVertCount(paths, npaths, NULL, &strokeCount);
+  int offset = mtlnvg__allocVerts(mtl, maxverts);
   if (offset == -1) goto error;
 
-  for (i = 0; i < npaths; i++) {
-    MNVGpath* copy = &mtl.buffers.paths[call->pathOffset + i];
-    const NVGpath* path = &paths[i];
-    memset(copy, 0, sizeof(MNVGpath));
+  call->strokeOffset = offset + 1;
+  call->strokeCount = strokeCount - 2;
+  NVGvertex* strokeVert = mtl.buffers.verts + offset;
+
+  NVGpath* path = (NVGpath*)&paths[0];
+  for (int i = npaths; i--; ++path) {
     if (path->nstroke > 0) {
-      copy->strokeOffset = offset;
-      copy->strokeCount = path->nstroke;
-      memcpy(&mtl.buffers.verts[offset], path->stroke,
-             sizeof(NVGvertex) * path->nstroke);
-      offset += path->nstroke;
+      memcpy(strokeVert, path->stroke, sizeof(NVGvertex));
+      ++strokeVert;
+      memcpy(strokeVert, path->stroke, sizeof(NVGvertex) * path->nstroke);
+      strokeVert += path->nstroke;
+      memcpy(strokeVert, path->stroke + path->nstroke - 1, sizeof(NVGvertex));
+      ++strokeVert;
     }
   }
 
