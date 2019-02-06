@@ -1190,9 +1190,6 @@ static void mtlnvg__renderFlush(void* uptr) {
   id<MTLTexture> colorTexture = nil;;
   vector_uint2 textureSize;
 
-  mtl.metalLayer.drawableSize = CGSizeMake(mtl.viewPortSize.x,
-                                           mtl.viewPortSize.y);
-
   buffers.commandBuffer = commandBuffer;
   [buffers.commandBuffer enqueue];
   [buffers.commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
