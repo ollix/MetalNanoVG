@@ -806,7 +806,6 @@ static int mtlnvg__renderCreate(void* uptr) {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     mtl.metalLayer.device = device;
   }
-  mtl.metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 #if TARGET_OS_OSX == 1
   mtl.metalLayer.opaque = NO;
 #endif
