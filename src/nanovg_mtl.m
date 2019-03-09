@@ -736,10 +736,6 @@ static int mtlnvg__renderCreateTexture(void* uptr, int type, int width,
       width:width
       height:height
       mipmapped:(imageFlags & NVG_IMAGE_GENERATE_MIPMAPS ? YES : NO)];
-#if TARGET_OS_OSX == 1
-  textureDescriptor.resourceOptions = MTLResourceStorageModePrivate;
-  textureDescriptor.storageMode = MTLStorageModeManaged;
-#endif
   textureDescriptor.usage = MTLTextureUsageShaderRead
                             | MTLTextureUsageRenderTarget
                             | MTLTextureUsageShaderWrite;
@@ -1243,6 +1239,17 @@ static void mtlnvg__renderFlush(void* uptr) {
   if (drawable) {
     [buffers.commandBuffer presentDrawable:drawable];
   }
+
+#if TARGET_OS_OSX == 1
+  // Makes mnvgReadPixels() work as expected on Mac.
+  if (s_framebuffer != NULL) {
+    id<MTLBlitCommandEncoder> blitCommandEncoder = [buffers.commandBuffer
+        blitCommandEncoder];
+    [blitCommandEncoder synchronizeResource:colorTexture];
+    [blitCommandEncoder endEncoding];
+  }
+#endif
+
   [buffers.commandBuffer commit];
 }
 
