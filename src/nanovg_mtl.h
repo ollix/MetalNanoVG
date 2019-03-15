@@ -101,6 +101,8 @@ void* mnvgImageHandle(NVGcontext* ctx, int image);
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
                     int height, void* data);
 
+int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags);
+
 #ifdef __cplusplus
 }
 #endif
