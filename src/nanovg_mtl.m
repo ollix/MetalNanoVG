@@ -1511,6 +1511,19 @@ void* mnvgCommandQueue(NVGcontext* ctx) {
   return (__bridge void*)mtl.commandQueue;
 }
 
+int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) {
+  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  MNVGtexture* tex = mtlnvg__allocTexture(mtl);
+  
+  if (tex == NULL) return 0;
+  
+  tex->type = NVG_TEXTURE_RGBA;
+  tex->tex = (id<MTLTexture>)textureId;
+  tex->flags = imageFlags;
+  
+  return tex->id;
+}
+
 void* mnvgDevice(NVGcontext* ctx) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   return (__bridge void*)mtl.metalLayer.device;
@@ -1557,17 +1570,4 @@ void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
         bytesPerRow:bytesPerRow
          fromRegion:MTLRegionMake2D(x, y, width, height)
         mipmapLevel:0];
-}
-
-int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) {
-  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
-  MNVGtexture* tex = mtlnvg__allocTexture(mtl);
-  
-  if (tex == NULL) return 0;
-  
-  tex->type = NVG_TEXTURE_RGBA;
-  tex->tex = (id<MTLTexture>) textureId;
-  tex->flags = imageFlags;
-  
-  return tex->id;
 }

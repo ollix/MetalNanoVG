@@ -91,6 +91,9 @@ void mnvgClearWithColor(NVGcontext* ctx, NVGcolor color);
 // Returns a pointer to the corresponded `id<MTLCommandQueue>` object.
 void* mnvgCommandQueue(NVGcontext* ctx);
 
+// Creates an image id from a `id<MTLTexture>` object pointer
+int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags);
+
 // Returns a pointer to the corresponded `id<MTLDevice>` object.
 void* mnvgDevice(NVGcontext* ctx);
 
@@ -100,8 +103,6 @@ void* mnvgImageHandle(NVGcontext* ctx, int image);
 // Copies the pixels from the specified image into the specified `data`.
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
                     int height, void* data);
-
-int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags);
 
 #ifdef __cplusplus
 }
