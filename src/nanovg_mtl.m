@@ -1517,11 +1517,11 @@ int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) 
   
   if (tex == NULL) return 0;
   
-  tex->type = NVG_TEXTURE_RGBA;
-  tex->tex = (id<MTLTexture>)textureId;
-  tex->flags = imageFlags;
+  tex.type = NVG_TEXTURE_RGBA;
+  tex.tex = (id<MTLTexture>)textureId;
+  tex.flags = imageFlags;
   
-  return tex->id;
+  return tex.id;
 }
 
 void* mnvgDevice(NVGcontext* ctx) {
