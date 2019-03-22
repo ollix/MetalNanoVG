@@ -1512,13 +1512,13 @@ void* mnvgCommandQueue(NVGcontext* ctx) {
 }
 
 int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) {
-  MNVGcontext* mtl = (MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   MNVGtexture* tex = mtlnvg__allocTexture(mtl);
   
   if (tex == NULL) return 0;
   
   tex.type = NVG_TEXTURE_RGBA;
-  tex.tex = (id<MTLTexture>)textureId;
+  tex.tex = (__bridge id<MTLTexture>)textureId;
   tex.flags = imageFlags;
   
   return tex.id;
