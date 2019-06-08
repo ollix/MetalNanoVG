@@ -561,7 +561,8 @@ void* mnvgImageHandle(NVGcontext* ctx, int image) {
   // Makes sure the command execution for the image has been done.
   for (MNVGbuffers* buffers in mtl.cbuffers) {
     if (buffers->isBusy && buffers->image == image && buffers->commandBuffer) {
-      [buffers->commandBuffer waitUntilCompleted];
+      id<MTLCommandBuffer> commandBuffer = buffers->commandBuffer;
+      [commandBuffer waitUntilCompleted];
       break;
     }
   }
@@ -585,7 +586,8 @@ void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
   // Makes sure the command execution for the image has been done.
   for (MNVGbuffers* buffers in mtl.cbuffers) {
     if (buffers->isBusy && buffers->image == image && buffers->commandBuffer) {
-      [buffers->commandBuffer waitUntilCompleted];
+      id<MTLCommandBuffer> commandBuffer = buffers->commandBuffer;
+      [commandBuffer waitUntilCompleted];
       break;
     }
   }
