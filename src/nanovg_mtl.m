@@ -29,10 +29,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#import <simd/simd.h>
 #import <Metal/Metal.h>
-#include <TargetConditionals.h>
 #import <QuartzCore/QuartzCore.h>
+#import <simd/simd.h>
+#include <TargetConditionals.h>
 
 #include "nanovg.h"
 
@@ -962,29 +962,25 @@ enum MNVGTarget mnvgTarget() {
   bool creates_pseudo_texture = false;
   unsigned char* metal_library_bitcode;
   unsigned int metal_library_bitcode_len;
-  NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo]
-      operatingSystemVersion];
 #if TARGET_OS_SIMULATOR
   metal_library_bitcode = mnvg_bitcode_simulator;
   metal_library_bitcode_len = mnvg_bitcode_simulator_len;
 #elif TARGET_OS_IOS
-  if (os_version.majorVersion < 8) {
+  if (@available(iOS 10, *)) {
+  } else if (@available(iOS 8, *)) {
+    creates_pseudo_texture = true;
+  } else {
     return 0;
   }
   metal_library_bitcode = mnvg_bitcode_ios;
   metal_library_bitcode_len = mnvg_bitcode_ios_len;
-  if (os_version.majorVersion == 8 || os_version.majorVersion == 9) {
-    creates_pseudo_texture = true;
-  }
 #elif TARGET_OS_OSX
-  if (os_version.majorVersion < 10) {
+  if (@available(macOS 10.11)) {
+    metal_library_bitcode = mnvg_bitcode_macos;
+    metal_library_bitcode_len = mnvg_bitcode_macos_len;
+  } else {
     return 0;
   }
-  if (os_version.majorVersion == 10 && os_version.minorVersion < 11) {
-    return 0;
-  }
-  metal_library_bitcode = mnvg_bitcode_macos;
-  metal_library_bitcode_len = mnvg_bitcode_macos_len;
 #elif TARGET_OS_TV
   metal_library_bitcode = mnvg_bitcode_tvos;
   metal_library_bitcode_len = mnvg_bitcode_tvos_len;
@@ -1429,7 +1425,7 @@ error:
       buffers->nverts = 0;
       buffers->ncalls = 0;
       buffers->nuniforms = 0;
-      dispatch_semaphore_signal(_semaphore);
+      dispatch_semaphore_signal(self.semaphore);
   }];
 
   if (s_framebuffer == NULL ||
