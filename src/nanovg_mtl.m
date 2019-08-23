@@ -975,7 +975,7 @@ enum MNVGTarget mnvgTarget() {
   metal_library_bitcode = mnvg_bitcode_ios;
   metal_library_bitcode_len = mnvg_bitcode_ios_len;
 #elif TARGET_OS_OSX
-  if (@available(macOS 10.11)) {
+  if (@available(macOS 10.11, *)) {
     metal_library_bitcode = mnvg_bitcode_macos;
     metal_library_bitcode_len = mnvg_bitcode_macos_len;
   } else {
