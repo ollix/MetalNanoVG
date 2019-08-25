@@ -1465,7 +1465,8 @@ error:
 
   [_renderEncoder endEncoding];
   _renderEncoder = nil;
-  if (drawable) {
+
+  if (drawable && !_metalLayer.presentsWithTransaction) {
     [_buffers->commandBuffer presentDrawable:drawable];
   }
 
@@ -1480,6 +1481,11 @@ error:
 #endif  // TARGET_OS_OSX
 
   [_buffers->commandBuffer commit];
+
+  if (drawable && _metalLayer.presentsWithTransaction) {
+    [_buffers->commandBuffer waitUntilScheduled];
+    [drawable present];
+  }
 }
 
 - (int)renderGetTextureSizeForImage:(int)image
