@@ -3,6 +3,11 @@ MetalNanoVG
 
 MetalNanoVG is the native [Metal](https://developer.apple.com/metal/) port of [NanoVG](https://github.com/memononen/nanovg) that tries to get the most out of Apple's Graphics APIs.
 
+### Donation
+If you found this project useful, please consider donating to show your support ❤️ 
+
+[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=3366Q3AVUJLTQ)
+
 Precautions
 ===========
 
