@@ -234,7 +234,8 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
               compositeOperation:(NVGcompositeOperationState)compositeOperation
                          scissor:(NVGscissor*)scissor
                            verts:(const NVGvertex*)verts
-                          nverts:(int)nverts;
+                          nverts:(int)nverts
+                          fringe:(float)fringe;
 
 - (int)renderUpdateTextureWithImage:(int)image
                                   x:(int)x
@@ -400,13 +401,14 @@ static void mtlnvg__renderStroke(void* uptr, NVGpaint* paint,
 
 static void mtlnvg__renderTriangles(
     void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation,
-    NVGscissor* scissor, const NVGvertex* verts, int nverts) {
+    NVGscissor* scissor, const NVGvertex* verts, int nverts, float fringe) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)uptr;
   [mtl renderTrianglesWithPaint:paint
              compositeOperation:compositeOperation
                         scissor:scissor
                           verts:verts
-                         nverts:nverts];
+                         nverts:nverts
+                         fringe:fringe];
 }
 
 static int mtlnvg__renderUpdateTexture(void* uptr, int image, int x, int y,
@@ -1577,7 +1579,8 @@ error:
               compositeOperation:(NVGcompositeOperationState)compositeOperation
                          scissor:(NVGscissor*)scissor
                            verts:(const NVGvertex*)verts
-                          nverts:(int)nverts {
+                          nverts:(int)nverts
+                          fringe:(float)fringe {
   MNVGcall* call = [self allocCall];
   MNVGfragUniforms* frag;
 
@@ -1603,7 +1606,7 @@ error:
                       paint:paint
                     scissor:scissor
                       width:1.0f
-                     fringe:1.0f
+                     fringe:fringe
                   strokeThr:-1.0f];
   frag->type = MNVG_SHADER_IMG;
 
