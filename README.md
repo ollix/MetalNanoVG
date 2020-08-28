@@ -28,13 +28,11 @@ Advantages
 Installation
 ============
 
- 1. Download both `NanoVG` and `MetalNanoVG` source codes.
- 2. Add both `NanoVG` and `MetalNanoVG`'s `src` directories to the header search
-    path.
- 3. Add `NanoVG`'s `src/nanovg.c` and `MetalNanoVG`'s `src/nanovg_mtl.m` to
-    the `Compile Sources` section in Xcode.
- 4. Link the `Metal` and `QuartzCore` frameworks.
- 5. For best performance, disable *GPU Frame Capture* and *Metal API Validation* as described [here](https://developer.apple.com/library/content/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/Dev-Technique/Dev-Technique.html#//apple_ref/doc/uid/TP40014221-CH8-SW3).
+## Swift Package Manager
+
+1. In Xcode, Select File -> Swift Packages -> Add Package Depedency
+1. Enter `https://github.com/ollix/MetalNanoVG` for the URL.
+ 1. For best performance, disable *GPU Frame Capture* and *Metal API Validation* as described [here](https://developer.apple.com/library/content/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/Dev-Technique/Dev-Technique.html#//apple_ref/doc/uid/TP40014221-CH8-SW3).
 
  Done.
 
