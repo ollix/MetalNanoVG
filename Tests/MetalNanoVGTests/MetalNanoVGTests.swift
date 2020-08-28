@@ -11,8 +11,4 @@ final class MetalNanoVGTests: XCTestCase {
 
         nvgDeleteMTL(nvg)
     }
-
-    static var allTests = [
-        ("testCreateContext", testCreateContext),
-    ]
 }
