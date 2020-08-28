@@ -39,6 +39,22 @@ Installation
 Usage
 =====
 
+## Swift
+
+1. Import.
+
+```Swift
+import MetalNanoVG
+```
+1. Pass the `CAMetalLayer` object when creating the NanoVG context.
+
+```Swift
+let layer = CAMetalLayer()
+let nvg = nvgCreateMTL(Unmanaged.passUnretained(layer).toOpaque(), Int32(NVG_ANTIALIAS.rawValue))
+```
+
+## Objective-C
+
  1. Include the headers.
 
 ```C
