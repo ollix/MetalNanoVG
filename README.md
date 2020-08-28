@@ -46,7 +46,7 @@ Usage
 ```Swift
 import MetalNanoVG
 ```
-1. Pass the `CAMetalLayer` object when creating the NanoVG context.
+2. Pass the `CAMetalLayer` object when creating the NanoVG context.
 
 ```Swift
 let layer = CAMetalLayer()
