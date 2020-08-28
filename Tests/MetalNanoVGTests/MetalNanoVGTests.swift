@@ -2,14 +2,17 @@ import XCTest
 @testable import MetalNanoVG
 
 final class MetalNanoVGTests: XCTestCase {
-    func testExample() {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct
-        // results.
-        XCTAssertEqual(MetalNanoVG().text, "Hello, World!")
+    func testCreateContext() {
+
+        let layer = CAMetalLayer()
+        let nvg = nvgCreateMTL(Unmanaged.passUnretained(layer).toOpaque(), Int32(NVG_ANTIALIAS.rawValue))
+
+        XCTAssertNotNil(nvg)
+
+        nvgDeleteMTL(nvg)
     }
 
     static var allTests = [
-        ("testExample", testExample),
+        ("testCreateContext", testCreateContext),
     ]
 }
