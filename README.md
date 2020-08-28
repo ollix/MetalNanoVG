@@ -28,7 +28,7 @@ Advantages
 Installation
 ============
 
-## Swift Package Manager
+## Swift Package Manager (requires Xcode 11 or later)
 
 1. In Xcode, Select File -> Swift Packages -> Add Package Depedency
 1. Enter `https://github.com/ollix/MetalNanoVG` for the URL.
