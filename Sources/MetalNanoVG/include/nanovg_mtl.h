@@ -24,11 +24,11 @@
 #ifndef NANOVG_MTL_H_
 #define NANOVG_MTL_H_
 
+#include "nanovg.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "nanovg.h"
 
 // Create flags
 enum NVGcreateFlags {
