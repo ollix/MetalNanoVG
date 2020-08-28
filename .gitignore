@@ -61,3 +61,10 @@ fastlane/test_output
 # https://github.com/johnno1962/injectionforxcode
 
 iOSInjectionProject/
+
+# Swift package manager
+.DS_Store
+/.build
+/Packages
+/*.xcodeproj
+xcuserdata/
