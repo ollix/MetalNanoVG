@@ -543,7 +543,12 @@ int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) 
 
   tex->type = NVG_TEXTURE_RGBA;
   tex->tex = (__bridge id<MTLTexture>)textureId;
+
+  // XXX: need to fully support flags.
   tex->flags = imageFlags;
+  MTLSamplerDescriptor* samplerDescriptor = [MTLSamplerDescriptor new];
+  tex->sampler = [mtl.commandQueue.device
+        newSamplerStateWithDescriptor:samplerDescriptor];
 
   return tex->id;
 }

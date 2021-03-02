@@ -21,25 +21,39 @@ Advantages
 
  * Shared buffers between CPU and GPU.
  * Various Metal states are cached whenever possible.
- * Low overheads compared to OpenGL.
+ * Low overhead compared to OpenGL.
  * Pre-compiled shaders. (no need to compile shaders at runtime)
  * Seamless integration with powerful Metal features such as [Metal Performance Shaders](https://developer.apple.com/documentation/metalperformanceshaders).
 
 Installation
 ============
 
- 1. Download both `NanoVG` and `MetalNanoVG` source codes.
- 2. Add both `NanoVG` and `MetalNanoVG`'s `src` directories to the header search
-    path.
- 3. Add `NanoVG`'s `src/nanovg.c` and `MetalNanoVG`'s `src/nanovg_mtl.m` to
-    the `Compile Sources` section in Xcode.
- 4. Link the `Metal` and `QuartzCore` frameworks.
- 5. For best performance, disable *GPU Frame Capture* and *Metal API Validation* as described [here](https://developer.apple.com/library/content/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/Dev-Technique/Dev-Technique.html#//apple_ref/doc/uid/TP40014221-CH8-SW3).
+## Swift Package Manager (requires Xcode 11 or later)
+
+1. In Xcode, Select File -> Swift Packages -> Add Package Depedency
+1. Enter `https://github.com/ollix/MetalNanoVG` for the URL.
+ 1. For best performance, disable *GPU Frame Capture* and *Metal API Validation* as described [here](https://developer.apple.com/library/content/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/Dev-Technique/Dev-Technique.html#//apple_ref/doc/uid/TP40014221-CH8-SW3).
 
  Done.
 
 Usage
 =====
+
+## Swift
+
+1. Import.
+
+```Swift
+import MetalNanoVG
+```
+2. Pass the `CAMetalLayer` object when creating the NanoVG context.
+
+```Swift
+let layer = CAMetalLayer()
+let nvg = nvgCreateMTL(Unmanaged.passUnretained(layer).toOpaque(), Int32(NVG_ANTIALIAS.rawValue))
+```
+
+## Objective-C
 
  1. Include the headers.
 
