@@ -908,9 +908,12 @@ enum MNVGTarget mnvgTarget() {
 
 - (id<MTLRenderCommandEncoder>)renderCommandEncoderWithColorTexture:
     (id<MTLTexture>)colorTexture {
-  id<MTLCommandBuffer> commandBuffer = _buffers->commandBuffer;
   MTLRenderPassDescriptor *descriptor = \
       [MTLRenderPassDescriptor renderPassDescriptor];
+  if (descriptor == nil) {
+    return nil;
+  }
+
   descriptor.colorAttachments[0].clearColor = _clearColor;
   descriptor.colorAttachments[0].loadAction = \
       _clearBufferOnFlush ? MTLLoadActionClear : MTLLoadActionLoad;
@@ -923,6 +926,7 @@ enum MNVGTarget mnvgTarget() {
   descriptor.stencilAttachment.storeAction = MTLStoreActionDontCare;
   descriptor.stencilAttachment.texture = _buffers->stencilTexture;
 
+  id<MTLCommandBuffer> commandBuffer = _buffers->commandBuffer;
   id<MTLRenderCommandEncoder> encoder = [commandBuffer
       renderCommandEncoderWithDescriptor:descriptor];
 
@@ -1449,6 +1453,9 @@ error:
     colorTexture = drawable.texture;
   }
   _renderEncoder = [self renderCommandEncoderWithColorTexture:colorTexture];
+  if (_renderEncoder == nil) {
+    return;
+  }
   MNVGcall* call = &buffers->calls[0];
   for (int i = buffers->ncalls; i--; ++call) {
     MNVGblend* blend = &call->blendFunc;
