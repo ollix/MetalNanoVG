@@ -1821,9 +1821,9 @@ error:
         height:size->y
         mipmapped:NO];
     stencilTextureDescriptor.usage = MTLTextureUsageRenderTarget;
-#if TARGET_OS_OSX || TARGET_OS_SIMULATOR
+#if TARGET_OS_OSX || TARGET_OS_SIMULATOR || TARGET_OS_MACCATALYST
     stencilTextureDescriptor.storageMode = MTLStorageModePrivate;
-#endif  // TARGET_OS_OSX || TARGET_OS_SIMULATOR
+#endif  // TARGET_OS_OSX || TARGET_OS_SIMULATOR || TARGET_OS_MACCATALYST
     _buffers->stencilTexture = [_metalLayer.device
         newTextureWithDescriptor:stencilTextureDescriptor];
   }
