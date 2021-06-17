@@ -179,6 +179,7 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 @property (nonatomic, strong) id<MTLFunction> fragmentFunction;
 @property (nonatomic, strong) id<MTLFunction> vertexFunction;
 @property MTLPixelFormat piplelinePixelFormat;
+@property NSUInteger pipelineSampleCount;
 @property (nonatomic, strong) id<MTLRenderPipelineState> pipelineState;
 @property (nonatomic, strong) id<MTLRenderPipelineState>
     stencilOnlyPipelineState;
@@ -253,7 +254,8 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 - (void)triangles:(MNVGcall*)call;
 
 - (void)updateRenderPipelineStatesForBlend:(MNVGblend*)blend
-                               pixelFormat:(MTLPixelFormat)pixelFormat;
+                               pixelFormat:(MTLPixelFormat)pixelFormat
+                               sampleCount:(NSUInteger)sampleCount;
 
 @end
 
@@ -1445,13 +1447,13 @@ error:
                                  (uint)colorTexture.height};
   }
   if (textureSize.x == 0 || textureSize.y == 0) return;
-  [self updateStencilTextureToSize:&textureSize];
 
   id<CAMetalDrawable> drawable = nil;
   if (colorTexture == nil) {
     drawable = _metalLayer.nextDrawable;
     colorTexture = drawable.texture;
   }
+  [self updateStencilTextureToSize:&textureSize sampleCount:colorTexture.sampleCount];
   _renderEncoder = [self renderCommandEncoderWithColorTexture:colorTexture];
   if (_renderEncoder == nil) {
     return;
@@ -1460,7 +1462,8 @@ error:
   for (int i = buffers->ncalls; i--; ++call) {
     MNVGblend* blend = &call->blendFunc;
     [self updateRenderPipelineStatesForBlend:blend
-                                 pixelFormat:colorTexture.pixelFormat];
+                                 pixelFormat:colorTexture.pixelFormat
+                                 sampleCount:colorTexture.sampleCount];
 
     if (call->type == MNVG_FILL)
       [self fill:call];
@@ -1481,7 +1484,7 @@ error:
 
 #if TARGET_OS_OSX
   // Makes mnvgReadPixels() work as expected on Mac.
-  if (s_framebuffer != NULL) {
+  if (s_framebuffer != NULL && colorTexture.storageMode == MTLResourceStorageModeManaged) {
     id<MTLBlitCommandEncoder> blitCommandEncoder = [_buffers->commandBuffer
         blitCommandEncoder];
     [blitCommandEncoder synchronizeResource:colorTexture];
@@ -1765,10 +1768,12 @@ error:
 }
 
 - (void)updateRenderPipelineStatesForBlend:(MNVGblend*)blend
-                               pixelFormat:(MTLPixelFormat)pixelFormat {
+                               pixelFormat:(MTLPixelFormat)pixelFormat
+                               sampleCount:(NSUInteger)sampleCount {
   if (_pipelineState != nil &&
       _stencilOnlyPipelineState != nil &&
       _piplelinePixelFormat == pixelFormat &&
+      _pipelineSampleCount == sampleCount &&
       _blendFunc->srcRGB == blend->srcRGB &&
       _blendFunc->dstRGB == blend->dstRGB &&
       _blendFunc->srcAlpha == blend->srcAlpha &&
@@ -1782,6 +1787,7 @@ error:
   MTLRenderPipelineColorAttachmentDescriptor* colorAttachmentDescriptor = \
       pipelineStateDescriptor.colorAttachments[0];
   colorAttachmentDescriptor.pixelFormat = pixelFormat;
+  pipelineStateDescriptor.sampleCount = sampleCount;
   pipelineStateDescriptor.stencilAttachmentPixelFormat = kStencilFormat;
   pipelineStateDescriptor.fragmentFunction = _fragmentFunction;
   pipelineStateDescriptor.vertexFunction = _vertexFunction;
@@ -1812,12 +1818,15 @@ error:
   [self checkError:error withMessage:"init pipeline stencil only state"];
 
   _piplelinePixelFormat = pixelFormat;
+  _pipelineSampleCount = sampleCount;
 }
 
 // Re-creates stencil texture whenever the specified size is bigger.
-- (void)updateStencilTextureToSize:(vector_uint2*)size {
+- (void)updateStencilTextureToSize:(vector_uint2*)size
+                       sampleCount:(NSUInteger)sampleCount {
   if (_buffers->stencilTexture != nil &&
-      (_buffers->stencilTexture.width < size->x ||
+      (_buffers->stencilTexture.sampleCount != sampleCount ||
+       _buffers->stencilTexture.width < size->x ||
        _buffers->stencilTexture.height < size->y)) {
     _buffers->stencilTexture = nil;
   }
@@ -1827,6 +1836,9 @@ error:
         width:size->x
         height:size->y
         mipmapped:NO];
+    stencilTextureDescriptor.textureType = \
+        (sampleCount > 1) ? MTLTextureType2DMultisample : MTLTextureType2D;
+    stencilTextureDescriptor.sampleCount = sampleCount;
     stencilTextureDescriptor.usage = MTLTextureUsageRenderTarget;
 #if TARGET_OS_OSX || TARGET_OS_SIMULATOR || TARGET_OS_MACCATALYST
     stencilTextureDescriptor.storageMode = MTLStorageModePrivate;
