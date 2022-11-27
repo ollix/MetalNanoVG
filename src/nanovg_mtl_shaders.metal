@@ -144,7 +144,7 @@ fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
 
   float strokeAlpha = strokeMask(uniforms, in.ftcoord);
   if (strokeAlpha < uniforms.strokeThr) {
-    return float4(0);
+    discard_fragment();
   }
 
   if (uniforms.type == 0) {  // MNVG_SHADER_FILLGRAD
