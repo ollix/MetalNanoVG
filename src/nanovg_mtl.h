@@ -115,6 +115,13 @@ void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
 // Returns the current OS target.
 enum MNVGTarget mnvgTarget();
 
+// Binds an MTLCommandBuffer. Intended for integration with an existing renderer.
+// The caller is responsible for invoking commit().
+void mnvgBindCommandBuffer(void* commandBuffer);
+
+// Binds an MTLTexture as the render target. Intended for integration with an existing renderer.
+void mnvgBindTargetTexture(void* texture);
+
 #ifdef __cplusplus
 }
 #endif

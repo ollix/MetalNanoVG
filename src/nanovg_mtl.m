@@ -639,6 +639,18 @@ enum MNVGTarget mnvgTarget() {
 #endif
 }
 
+static void* s_customCommandBuffer = nil;
+
+void mnvgBindCommandBuffer(void* commandBuffer) {
+  s_customCommandBuffer = commandBuffer;
+}
+
+static void* s_targetTexture = nil;
+
+void mnvgBindTargetTexture(void* texture) {
+  s_targetTexture = texture;
+}
+
 @implementation MNVGbuffers
 @end
 
@@ -1416,7 +1428,8 @@ error:
     return;
   }
 
-  id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+  id<MTLCommandBuffer> commandBuffer = s_customCommandBuffer ?
+    (__bridge id<MTLCommandBuffer>) s_customCommandBuffer : [_commandQueue commandBuffer];
   id<MTLTexture> colorTexture = nil;;
   vector_uint2 textureSize;
 
@@ -1446,6 +1459,10 @@ error:
   }
   if (textureSize.x == 0 || textureSize.y == 0) return;
   [self updateStencilTextureToSize:&textureSize];
+
+  if (s_targetTexture) {
+    colorTexture = (__bridge id<MTLTexture>) s_targetTexture;
+  }
 
   id<CAMetalDrawable> drawable = nil;
   if (colorTexture == nil) {
@@ -1489,12 +1506,17 @@ error:
   }
 #endif  // TARGET_OS_OSX
 
-  [_buffers.commandBuffer commit];
+  if (s_customCommandBuffer == nil) {
+    [_buffers.commandBuffer commit];
+  }
 
   if (drawable && _metalLayer.presentsWithTransaction) {
     [_buffers.commandBuffer waitUntilScheduled];
     [drawable present];
   }
+
+  s_targetTexture = nil;
+  s_customCommandBuffer = nil;
 }
 
 - (int)renderGetTextureSizeForImage:(int)image
