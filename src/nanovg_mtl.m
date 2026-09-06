@@ -555,6 +555,17 @@ void* mnvgDevice(NVGcontext* ctx) {
   return (__bridge void*)mtl.metalLayer.device;
 }
 
+void mnvgWaitUntilCompleted(NVGcontext* ctx) {
+  if (ctx == NULL) return;
+  MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
+  for (MNVGbuffers* buffers in mtl.cbuffers) {
+    id<MTLCommandBuffer> commandBuffer = buffers.commandBuffer;
+    if (buffers.isBusy && commandBuffer != nil) {
+      [commandBuffer waitUntilCompleted];
+    }
+  }
+}
+
 void* mnvgImageHandle(NVGcontext* ctx, int image) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   MNVGtexture* tex = [mtl findTexture:image];
@@ -1418,6 +1429,7 @@ error:
   }
 
   id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+  commandBuffer.label = @"MetalNanoVG Surface";
   id<MTLTexture> colorTexture = nil;;
   vector_uint2 textureSize;
 

@@ -105,6 +105,9 @@ int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags);
 // Returns a pointer to the corresponded `id<MTLDevice>` object.
 void* mnvgDevice(NVGcontext* ctx);
 
+// Waits until all command buffers submitted by the context have completed.
+void mnvgWaitUntilCompleted(NVGcontext* ctx);
+
 // Returns a pointer to the `id<MTLTexture>` object of the specified image.
 void* mnvgImageHandle(NVGcontext* ctx, int image);
 
