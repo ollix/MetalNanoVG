@@ -121,6 +121,7 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 @interface MNVGbuffers : NSObject
 
 @property (nonatomic, strong) id<MTLCommandBuffer> commandBuffer;
+@property (nonatomic, strong) id<CAMetalDrawable> drawable;
 @property (nonatomic, assign) BOOL isBusy;
 @property (nonatomic, assign) int image;
 @property (nonatomic, strong) id<MTLBuffer> viewSizeBuffer;
@@ -1426,6 +1427,7 @@ error:
   [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
       buffers.isBusy = NO;
       buffers.commandBuffer = nil;
+      buffers.drawable = nil;
       buffers.image = 0;
       buffers.nindexes = 0;
       buffers.nverts = 0;
@@ -1450,6 +1452,11 @@ error:
   id<CAMetalDrawable> drawable = nil;
   if (colorTexture == nil) {
     drawable = _metalLayer.nextDrawable;
+    // Keep the drawable alive until the GPU has finished using its texture.
+    // This is especially important when presentsWithTransaction is enabled:
+    // resizing the CAMetalLayer can otherwise recycle the drawable after the
+    // command buffer is scheduled but before it has completed.
+    buffers.drawable = drawable;
     colorTexture = drawable.texture;
   }
   _renderEncoder = [self renderCommandEncoderWithColorTexture:colorTexture];
