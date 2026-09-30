@@ -86,6 +86,11 @@ void mnvgBindFramebuffer(MNVGframebuffer* framebuffer);
 MNVGframebuffer* mnvgCreateFramebuffer(NVGcontext* ctx, int width,
                                        int height, int imageFlags);
 
+// Single-channel coverage, sampled as premultiplied white. Draw white coverage
+// and use blends independent of destination alpha (R8 has no alpha channel).
+MNVGframebuffer* mnvgCreateCoverageFramebuffer(NVGcontext* ctx, int width,
+                                               int height, int imageFlags);
+
 // Deletes the specified framebuffer.
 void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer);
 

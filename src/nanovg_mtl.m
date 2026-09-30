@@ -522,6 +522,22 @@ void mnvgDeleteFramebuffer(MNVGframebuffer* framebuffer) {
   free(framebuffer);
 }
 
+MNVGframebuffer* mnvgCreateCoverageFramebuffer(NVGcontext* ctx, int width,
+                                               int height, int imageFlags) {
+  MNVGframebuffer* framebuffer = calloc(1, sizeof(MNVGframebuffer));
+  if (framebuffer == NULL) return NULL;
+  NVGparams* params = nvgInternalParams(ctx);
+  framebuffer->image = params->renderCreateTexture(
+      params->userPtr, NVG_TEXTURE_ALPHA, width, height,
+      imageFlags | NVG_IMAGE_PREMULTIPLIED, NULL);
+  if (framebuffer->image <= 0) {
+    free(framebuffer);
+    return NULL;
+  }
+  framebuffer->ctx = ctx;
+  return framebuffer;
+}
+
 void mnvgClearWithColor(NVGcontext* ctx, NVGcolor color) {
   MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
   float alpha = (float)color.a;
@@ -1195,6 +1211,11 @@ enum MNVGTarget mnvgTarget() {
   textureDescriptor.storageMode = MTLStorageModePrivate;
 #endif  // TARGET_OS_SIMULATOR
   tex->tex = [_metalLayer.device newTextureWithDescriptor:textureDescriptor];
+  if (tex->tex == nil) {
+    tex->id = 0;
+    tex->flags = 0;
+    return 0;
+  }
 
   if (data != NULL) {
     NSUInteger bytesPerRow;
