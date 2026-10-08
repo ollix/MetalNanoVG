@@ -1722,8 +1722,10 @@ error:
 - (void)renderViewportWithWidth:(float)width
                          height:(float)height
                devicePixelRatio:(float)devicePixelRatio {
-  _viewPortSize = (vector_uint2){width * devicePixelRatio,
-                                 height * devicePixelRatio};
+  // Fractional display density must not truncate an exact framebuffer extent
+  // one pixel short after float conversion; retained copies would shrink it.
+  _viewPortSize = (vector_uint2){lroundf(width * devicePixelRatio),
+                                 lroundf(height * devicePixelRatio)};
 
   dispatch_semaphore_wait(_semaphore, DISPATCH_TIME_FOREVER);
   for (MNVGbuffers* buffers in _cbuffers) {
