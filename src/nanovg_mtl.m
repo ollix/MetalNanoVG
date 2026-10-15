@@ -492,6 +492,9 @@ static void mtlnvg__vset(NVGvertex* vtx, float x, float y, float u, float v) {
 }
 
 void nvgDeleteMTL(NVGcontext* ctx) {
+  // Completion handlers still own and reset the frame slots until the GPU
+  // finishes. Do not destroy their storage while those callbacks can run.
+  mnvgWaitUntilCompleted(ctx);
   nvgDeleteInternal(ctx);
 }
 
@@ -571,15 +574,29 @@ void* mnvgDevice(NVGcontext* ctx) {
   return (__bridge void*)mtl.metalLayer.device;
 }
 
+static void mnvgWaitForImageCommands(MNVGcontext* mtl, int image) {
+  NSMutableArray<id<MTLCommandBuffer>>* commands = [NSMutableArray array];
+  // Completion handlers release frame slots on a different thread. Retain a
+  // stable snapshot before waiting, without holding the pool lock on the GPU.
+  @synchronized(mtl.cbuffers) {
+    for (MNVGbuffers* buffers in mtl.cbuffers) {
+      if (buffers.isBusy && buffers.commandBuffer != nil &&
+          (image == 0 || buffers.image == image)) {
+        [commands addObject:buffers.commandBuffer];
+      }
+    }
+  }
+  // Several queued frames can write the same image. Waiting only the first
+  // matching slot can expose an earlier clear instead of the latest drawing.
+  for (id<MTLCommandBuffer> command in commands) {
+    [command waitUntilCompleted];
+  }
+}
+
 void mnvgWaitUntilCompleted(NVGcontext* ctx) {
   if (ctx == NULL) return;
   MNVGcontext* mtl = (__bridge MNVGcontext*)nvgInternalParams(ctx)->userPtr;
-  for (MNVGbuffers* buffers in mtl.cbuffers) {
-    id<MTLCommandBuffer> commandBuffer = buffers.commandBuffer;
-    if (buffers.isBusy && commandBuffer != nil) {
-      [commandBuffer waitUntilCompleted];
-    }
-  }
+  mnvgWaitForImageCommands(mtl, 0);
 }
 
 void* mnvgImageHandle(NVGcontext* ctx, int image) {
@@ -588,13 +605,7 @@ void* mnvgImageHandle(NVGcontext* ctx, int image) {
   if (tex == nil) return NULL;
 
   // Makes sure the command execution for the image has been done.
-  for (MNVGbuffers* buffers in mtl.cbuffers) {
-    if (buffers.isBusy && buffers.image == image && buffers.commandBuffer) {
-      id<MTLCommandBuffer> commandBuffer = buffers.commandBuffer;
-      [commandBuffer waitUntilCompleted];
-      break;
-    }
-  }
+  mnvgWaitForImageCommands(mtl, image);
 
   return (__bridge void*)tex->tex;
 }
@@ -613,13 +624,7 @@ void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
   }
 
   // Makes sure the command execution for the image has been done.
-  for (MNVGbuffers* buffers in mtl.cbuffers) {
-    if (buffers.isBusy && buffers.image == image && buffers.commandBuffer) {
-      id<MTLCommandBuffer> commandBuffer = buffers.commandBuffer;
-      [commandBuffer waitUntilCompleted];
-      break;
-    }
-  }
+  mnvgWaitForImageCommands(mtl, image);
 
 #if TARGET_OS_SIMULATOR
   CAMetalLayer* metalLayer = mtl.metalLayer;
@@ -925,12 +930,14 @@ enum MNVGTarget mnvgTarget() {
 }
 
 - (void)renderCancel {
-  _buffers.image = 0;
-  _buffers.isBusy = NO;
-  _buffers.nindexes = 0;
-  _buffers.nverts = 0;
-  _buffers.ncalls = 0;
-  _buffers.nuniforms = 0;
+  @synchronized(_cbuffers) {
+    _buffers.image = 0;
+    _buffers.nindexes = 0;
+    _buffers.nverts = 0;
+    _buffers.ncalls = 0;
+    _buffers.nuniforms = 0;
+    _buffers.isBusy = NO;
+  }
   dispatch_semaphore_signal(_semaphore);
 }
 
@@ -1455,10 +1462,10 @@ error:
   vector_uint2 textureSize;
 
   _buffers.commandBuffer = commandBuffer;
-  __block MNVGbuffers* buffers = _buffers;
+  MNVGbuffers* buffers = _buffers;
   [commandBuffer enqueue];
   [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-      buffers.isBusy = NO;
+    @synchronized(self.cbuffers) {
       buffers.commandBuffer = nil;
       buffers.drawable = nil;
       buffers.image = 0;
@@ -1466,7 +1473,12 @@ error:
       buffers.nverts = 0;
       buffers.ncalls = 0;
       buffers.nuniforms = 0;
-      dispatch_semaphore_signal(self.semaphore);
+      // Publish availability only after all previous-frame state is cleared.
+      // Otherwise the render thread can reuse this slot and have its new draw
+      // calls erased by the remainder of this completion handler.
+      buffers.isBusy = NO;
+    }
+    dispatch_semaphore_signal(self.semaphore);
   }];
 
   if (s_framebuffer == NULL ||
@@ -1479,7 +1491,12 @@ error:
     textureSize = (vector_uint2){(uint)colorTexture.width,
                                  (uint)colorTexture.height};
   }
-  if (textureSize.x == 0 || textureSize.y == 0) return;
+  if (textureSize.x == 0 || textureSize.y == 0) {
+    // Even an aborted frame must complete its enqueued command and release
+    // its slot. Otherwise the queue and context-destruction fence can stall.
+    [commandBuffer commit];
+    return;
+  }
   [self updateStencilTextureToSize:&textureSize];
 
   id<CAMetalDrawable> drawable = nil;
@@ -1494,6 +1511,7 @@ error:
   }
   _renderEncoder = [self renderCommandEncoderWithColorTexture:colorTexture];
   if (_renderEncoder == nil) {
+    [commandBuffer commit];
     return;
   }
   MNVGcall* call = &buffers.calls[0];
@@ -1728,11 +1746,13 @@ error:
                                  lroundf(height * devicePixelRatio)};
 
   dispatch_semaphore_wait(_semaphore, DISPATCH_TIME_FOREVER);
-  for (MNVGbuffers* buffers in _cbuffers) {
-    if (!buffers.isBusy) {
-      buffers.isBusy = YES;
-      _buffers = buffers;
-      break;
+  @synchronized(_cbuffers) {
+    for (MNVGbuffers* buffers in _cbuffers) {
+      if (!buffers.isBusy) {
+        buffers.isBusy = YES;
+        _buffers = buffers;
+        break;
+      }
     }
   }
 
