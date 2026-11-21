@@ -123,11 +123,11 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
   }
 }
 
-// Fragment function (AA)
-fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
-                                 constant Uniforms& uniforms [[buffer(0)]],
-                                 texture2d<float> texture [[texture(0)]],
-                                 sampler sampler [[sampler(0)]]) {
+template <bool DiscardStrokeFringe>
+static inline float4 shadeFragmentAA(RasterizerData in,
+                                     constant Uniforms& uniforms,
+                                     texture2d<float> texture,
+                                     sampler sampler) {
   float scissor = scissorMask(uniforms, in.fpos);
   if (scissor == 0)
     return float4(0);
@@ -144,6 +144,9 @@ fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
 
   float strokeAlpha = strokeMask(uniforms, in.ftcoord);
   if (strokeAlpha < uniforms.strokeThr) {
+    if (DiscardStrokeFringe) {
+      discard_fragment();
+    }
     return float4(0);
   }
 
@@ -166,4 +169,20 @@ fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
     color *= strokeAlpha;
     return color * uniforms.innerCol;
   }
+}
+
+fragment float4 fragmentShaderAA(RasterizerData in [[stage_in]],
+                                 constant Uniforms& uniforms [[buffer(0)]],
+                                 texture2d<float> texture [[texture(0)]],
+                                 sampler sampler [[sampler(0)]]) {
+  return shadeFragmentAA<false>(in, uniforms, texture, sampler);
+}
+
+fragment float4 fragmentShaderStencilBaseAA(
+    RasterizerData in [[stage_in]],
+    constant Uniforms& uniforms [[buffer(0)]],
+    texture2d<float> texture [[texture(0)]],
+    sampler sampler [[sampler(0)]]) {
+  // Leave the stencil untouched where the second pass draws the fringe.
+  return shadeFragmentAA<true>(in, uniforms, texture, sampler);
 }
