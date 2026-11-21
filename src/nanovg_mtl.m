@@ -1554,8 +1554,9 @@ error:
   }
 
 #if TARGET_OS_OSX
-  // Makes mnvgReadPixels() work as expected on Mac.
-  if (s_framebuffer != NULL) {
+  // Managed framebuffer textures need GPU writes synchronized for CPU reads.
+  if (buffers.image != 0 &&
+      colorTexture.storageMode == MTLStorageModeManaged) {
     id<MTLBlitCommandEncoder> blitCommandEncoder = [_buffers.commandBuffer
         blitCommandEncoder];
     [blitCommandEncoder synchronizeResource:colorTexture];
