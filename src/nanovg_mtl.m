@@ -1859,7 +1859,11 @@ error:
   MTLRenderPipelineColorAttachmentDescriptor* colorAttachmentDescriptor = \
       pipelineStateDescriptor.colorAttachments[0];
   colorAttachmentDescriptor.pixelFormat = pixelFormat;
-  pipelineStateDescriptor.rasterSampleCount = sampleCount;
+  // The original setter also works on systems predating rasterSampleCount.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  pipelineStateDescriptor.sampleCount = sampleCount;
+#pragma clang diagnostic pop
   pipelineStateDescriptor.stencilAttachmentPixelFormat = kStencilFormat;
   pipelineStateDescriptor.fragmentFunction = _fragmentFunction;
   pipelineStateDescriptor.vertexFunction = _vertexFunction;
