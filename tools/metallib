@@ -23,82 +23,36 @@
 # ---
 # Author: olliwang@ollix.com (Olli Wang)
 #
-# This script compiles the metal source file "nanovg_mtl_shaders.metal"
-# into metallib binary data as defined in "nanovg_mtl_metallib_*.h" headers.
+# Compile the Metal shader into the platform headers under src/mnvg_bitcode.
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd $DIR/../src
+set -e
+cd "$(dirname "${BASH_SOURCE[0]}")/../src"
 
-result=true
+output_dir=mnvg_bitcode
+stage_dir=$(mktemp -d ./.metallib.XXXXXX)
+trap 'rm -rf "$stage_dir"' EXIT
+mkdir "$stage_dir/$output_dir"
 
-PREFIX="mnvg_bitcode"
+compile_shader() {
+  local sdk=$1
+  local binary="$output_dir/$2"
+  local air="$stage_dir/$2.air"
+  shift 2
 
-mkdir $PREFIX
-
-execute_cmd() {
-  SDK=$1
-  TARGET=$2
-
-  SUFFIX=""
-  CMD="xcrun -sdk $SDK metal -c nanovg_mtl_shaders.metal"
-
-  AIR_FILE_NAME="$PREFIX/$TARGET$SUFFIX.air"
-  HEADER_NAME="$PREFIX/$TARGET$SUFFIX.h"
-  VARIABLE_NAME="$PREFIX/$TARGET$SUFFIX"
-
-  if [ $SDK = "iphoneos" ]; then
-    CMD="$CMD -mios-version-min=8.0"
-  elif [ $SDK = "macosx" ]; then
-    CMD="$CMD -mmacosx-version-min=10.11"
-  elif [ $SDK = "xros" ]; then
-    CMD="$CMD -target air64-apple-xros1.0"
-  fi
-
-  CMD="$CMD -o $AIR_FILE_NAME"
-  eval $CMD
-
-  if [ $? -ne 0 ]; then
-    return 1
-  fi
-  xcrun -sdk $SDK metallib $AIR_FILE_NAME -o $VARIABLE_NAME \
-      > /dev/null 2>&1
-  xxd -i $VARIABLE_NAME > $HEADER_NAME
-  rm $AIR_FILE_NAME $VARIABLE_NAME
-  return 0
+  echo "* Compiling for $sdk..."
+  xcrun -sdk "$sdk" metal -c nanovg_mtl_shaders.metal "$@" -o "$air"
+  xcrun -sdk "$sdk" metallib "$air" -o "$stage_dir/$binary"
+  # xxd derives the C identifier from the relative path.
+  (cd "$stage_dir" && xxd -i "$binary") > "$stage_dir/$binary.h"
 }
 
-for SDK in "iphoneos" "iphonesimulator" "macosx" "appletvos" "xros"; do
-  if [ $SDK = "appletvos" ]; then
-    echo "* Compiling for tvOS..."
-    TARGET="tvos"
-    execute_cmd $SDK $TARGET
-    if [ $? -ne 0 ]; then
-      result=false
-      break
-    fi
-  else
-    if [ $SDK = "iphoneos" ]; then
-      echo "* Compiling for iOS..."
-      TARGET="ios"
-    elif [ $SDK = "iphonesimulator" ]; then
-      echo "* Compiling for Simulator..."
-      TARGET="simulator"
-    elif [ $SDK = "macosx" ]; then
-      echo "* Compiling for macOS..."
-      TARGET="macos"
-    elif [ $SDK = "xros" ]; then
-      echo "* Compiling for visionOS..."
-      TARGET="xros"
-    fi
+compile_shader iphoneos ios -mios-version-min=8.0
+compile_shader iphonesimulator simulator -target air64-apple-ios13.2-simulator
+compile_shader macosx macos -mmacosx-version-min=10.11
+compile_shader appletvos tvos -target air64-apple-tvos13.2
+compile_shader xros xros -target air64-apple-xros1.0
 
-    execute_cmd $SDK $TARGET
-    if [ $? -ne 0 ]; then
-      result=false
-      break
-    fi
-  fi
-done
-
-if $result; then
-  echo "Done"
-fi
+# Replace the bundled headers only after all five libraries have been built.
+mkdir -p "$output_dir"
+mv "$stage_dir/$output_dir/"*.h "$output_dir/"
+echo "Done"

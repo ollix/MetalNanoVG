@@ -181,9 +181,11 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
     strokeAntiAliasStencilState;
 @property (nonatomic, strong) id<MTLDepthStencilState> strokeClearStencilState;
 @property (nonatomic, strong) id<MTLFunction> fragmentFunction;
+@property (nonatomic, strong) id<MTLFunction> stencilBaseFragmentFunction;
 @property (nonatomic, strong) id<MTLFunction> vertexFunction;
 @property MTLPixelFormat piplelinePixelFormat;
 @property (nonatomic, strong) id<MTLRenderPipelineState> pipelineState;
+@property (nonatomic, strong) id<MTLRenderPipelineState> stencilBasePipelineState;
 @property (nonatomic, strong) id<MTLRenderPipelineState>
     stencilOnlyPipelineState;
 @property (nonatomic, strong) id<MTLSamplerState> pseudoSampler;
@@ -1048,6 +1050,11 @@ enum MNVGTarget mnvgTarget() {
   _vertexFunction = [library newFunctionWithName:@"vertexShader"];
   if (_flags & NVG_ANTIALIAS) {
     _fragmentFunction = [library newFunctionWithName:@"fragmentShaderAA"];
+    if (_flags & NVG_STENCIL_STROKES) {
+      _stencilBaseFragmentFunction =
+          [library newFunctionWithName:@"fragmentShaderStencilBaseAA"];
+      if (_stencilBaseFragmentFunction == nil) return 0;
+    }
   } else {
     _fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
   }
@@ -1338,8 +1345,10 @@ enum MNVGTarget mnvgTarget() {
   _strokeAntiAliasStencilState = nil;
   _strokeClearStencilState = nil;
   _fragmentFunction = nil;
+  _stencilBaseFragmentFunction = nil;
   _vertexFunction = nil;
   _pipelineState = nil;
+  _stencilBasePipelineState = nil;
   _stencilOnlyPipelineState = nil;
   _pseudoSampler = nil;
   _pseudoTexture = nil;
@@ -1796,7 +1805,8 @@ error:
     // Fills the stroke base without overlap.
     [self setUniforms:(call->uniformOffset + _fragSize) image:call->image];
     [_renderEncoder setDepthStencilState:_strokeShapeStencilState];
-    [_renderEncoder setRenderPipelineState:_pipelineState];
+    [_renderEncoder setRenderPipelineState:_stencilBasePipelineState ?:
+                                            _pipelineState];
     [_renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:call->strokeOffset
                        vertexCount:call->strokeCount];
@@ -1804,6 +1814,7 @@ error:
     // Draws anti-aliased fragments.
     [self setUniforms:call->uniformOffset image:call->image];
     [_renderEncoder setDepthStencilState:_strokeAntiAliasStencilState];
+    [_renderEncoder setRenderPipelineState:_pipelineState];
     [_renderEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:call->strokeOffset
                        vertexCount:call->strokeCount];
@@ -1872,6 +1883,15 @@ error:
       newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
                                      error:&error];
   [self checkError:error withMessage:"init pipeline state"];
+
+  if (_stencilBaseFragmentFunction != nil) {
+    pipelineStateDescriptor.fragmentFunction = _stencilBaseFragmentFunction;
+    error = nil;
+    _stencilBasePipelineState = [_metalLayer.device
+        newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
+                                       error:&error];
+    [self checkError:error withMessage:"init stencil stroke base pipeline"];
+  }
 
   pipelineStateDescriptor.fragmentFunction = nil;
   colorAttachmentDescriptor.writeMask = MTLColorWriteMaskNone;
