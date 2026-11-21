@@ -117,7 +117,8 @@ void mnvgWaitUntilCompleted(NVGcontext* ctx);
 // Returns a pointer to the `id<MTLTexture>` object of the specified image.
 void* mnvgImageHandle(NVGcontext* ctx, int image);
 
-// Copies the pixels from the specified image into the specified `data`.
+// Copies pixels from a single-sample image into data. Resolve multisampled
+// framebuffer textures to a single-sample image before reading pixels.
 void mnvgReadPixels(NVGcontext* ctx, int image, int x, int y, int width,
                     int height, void* data);
 

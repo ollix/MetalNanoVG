@@ -184,6 +184,7 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 @property (nonatomic, strong) id<MTLFunction> stencilBaseFragmentFunction;
 @property (nonatomic, strong) id<MTLFunction> vertexFunction;
 @property MTLPixelFormat piplelinePixelFormat;
+@property NSUInteger pipelineSampleCount;
 @property (nonatomic, strong) id<MTLRenderPipelineState> pipelineState;
 @property (nonatomic, strong) id<MTLRenderPipelineState> stencilBasePipelineState;
 @property (nonatomic, strong) id<MTLRenderPipelineState>
@@ -259,7 +260,8 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 - (void)triangles:(MNVGcall*)call;
 
 - (void)updateRenderPipelineStatesForBlend:(MNVGblend*)blend
-                               pixelFormat:(MTLPixelFormat)pixelFormat;
+                               pixelFormat:(MTLPixelFormat)pixelFormat
+                               sampleCount:(NSUInteger)sampleCount;
 
 @end
 
@@ -1474,8 +1476,7 @@ error:
 
   id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
   commandBuffer.label = @"MetalNanoVG Surface";
-  id<MTLTexture> colorTexture = nil;;
-  vector_uint2 textureSize;
+  id<MTLTexture> colorTexture = nil;
 
   _buffers.commandBuffer = commandBuffer;
   MNVGbuffers* buffers = _buffers;
@@ -1497,34 +1498,26 @@ error:
     dispatch_semaphore_signal(self.semaphore);
   }];
 
+  id<CAMetalDrawable> drawable = nil;
   if (s_framebuffer == NULL ||
       nvgInternalParams(s_framebuffer->ctx)->userPtr != (__bridge void*)self) {
-    textureSize = _viewPortSize;
-  } else {  // renders in framebuffer
+    drawable = _metalLayer.nextDrawable;
+    // Retain the drawable until the GPU finishes, including transactional presents.
+    buffers.drawable = drawable;
+    colorTexture = drawable.texture;
+  } else {
     buffers.image = s_framebuffer->image;
-    MNVGtexture* tex = [self findTexture:s_framebuffer->image];
-    colorTexture = tex->tex;
-    textureSize = (vector_uint2){(uint)colorTexture.width,
-                                 (uint)colorTexture.height};
+    MNVGtexture* tex = [self findTexture:buffers.image];
+    if (tex != nil) colorTexture = tex->tex;
   }
-  if (textureSize.x == 0 || textureSize.y == 0) {
-    // Even an aborted frame must complete its enqueued command and release
-    // its slot. Otherwise the queue and context-destruction fence can stall.
+  if (colorTexture == nil) {
+    // Drop this frame's clear and let completion release its slot.
+    _clearBufferOnFlush = NO;
     [commandBuffer commit];
     return;
   }
-  [self updateStencilTextureToSize:&textureSize];
-
-  id<CAMetalDrawable> drawable = nil;
-  if (colorTexture == nil) {
-    drawable = _metalLayer.nextDrawable;
-    // Keep the drawable alive until the GPU has finished using its texture.
-    // This is especially important when presentsWithTransaction is enabled:
-    // resizing the CAMetalLayer can otherwise recycle the drawable after the
-    // command buffer is scheduled but before it has completed.
-    buffers.drawable = drawable;
-    colorTexture = drawable.texture;
-  }
+  const NSUInteger sampleCount = colorTexture.sampleCount;
+  [self updateStencilTextureForColorTexture:colorTexture];
   _renderEncoder = [self renderCommandEncoderWithColorTexture:colorTexture];
   if (_renderEncoder == nil) {
     [commandBuffer commit];
@@ -1534,7 +1527,8 @@ error:
   for (int i = buffers.ncalls; i--; ++call) {
     MNVGblend* blend = &call->blendFunc;
     [self updateRenderPipelineStatesForBlend:blend
-                                 pixelFormat:colorTexture.pixelFormat];
+                                 pixelFormat:colorTexture.pixelFormat
+                                 sampleCount:sampleCount];
 
     if (call->type == MNVG_FILL)
       [self fill:call];
@@ -1846,10 +1840,12 @@ error:
 }
 
 - (void)updateRenderPipelineStatesForBlend:(MNVGblend*)blend
-                               pixelFormat:(MTLPixelFormat)pixelFormat {
+                               pixelFormat:(MTLPixelFormat)pixelFormat
+                               sampleCount:(NSUInteger)sampleCount {
   if (_pipelineState != nil &&
       _stencilOnlyPipelineState != nil &&
       _piplelinePixelFormat == pixelFormat &&
+      _pipelineSampleCount == sampleCount &&
       _blendFunc->srcRGB == blend->srcRGB &&
       _blendFunc->dstRGB == blend->dstRGB &&
       _blendFunc->srcAlpha == blend->srcAlpha &&
@@ -1863,6 +1859,11 @@ error:
   MTLRenderPipelineColorAttachmentDescriptor* colorAttachmentDescriptor = \
       pipelineStateDescriptor.colorAttachments[0];
   colorAttachmentDescriptor.pixelFormat = pixelFormat;
+  // The original setter also works on systems predating rasterSampleCount.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  pipelineStateDescriptor.sampleCount = sampleCount;
+#pragma clang diagnostic pop
   pipelineStateDescriptor.stencilAttachmentPixelFormat = kStencilFormat;
   pipelineStateDescriptor.fragmentFunction = _fragmentFunction;
   pipelineStateDescriptor.vertexFunction = _vertexFunction;
@@ -1902,21 +1903,30 @@ error:
   [self checkError:error withMessage:"init pipeline stencil only state"];
 
   _piplelinePixelFormat = pixelFormat;
+  _pipelineSampleCount = sampleCount;
 }
 
-// Re-creates stencil texture whenever the specified size is bigger.
-- (void)updateStencilTextureToSize:(vector_uint2*)size {
+// Reuse a stencil attachment if it covers the target and matches its samples.
+- (void)updateStencilTextureForColorTexture:(id<MTLTexture>)colorTexture {
+  const NSUInteger width = colorTexture.width;
+  const NSUInteger height = colorTexture.height;
+  const NSUInteger sampleCount = colorTexture.sampleCount;
   if (_buffers.stencilTexture != nil &&
-      (_buffers.stencilTexture.width < size->x ||
-       _buffers.stencilTexture.height < size->y)) {
+      (_buffers.stencilTexture.sampleCount != sampleCount ||
+       _buffers.stencilTexture.width < width ||
+       _buffers.stencilTexture.height < height)) {
     _buffers.stencilTexture = nil;
   }
   if (_buffers.stencilTexture == nil) {
     MTLTextureDescriptor* stencilTextureDescriptor = [MTLTextureDescriptor
         texture2DDescriptorWithPixelFormat:kStencilFormat
-        width:size->x
-        height:size->y
+        width:width
+        height:height
         mipmapped:NO];
+    if (sampleCount > 1) {
+      stencilTextureDescriptor.textureType = MTLTextureType2DMultisample;
+      stencilTextureDescriptor.sampleCount = sampleCount;
+    }
     stencilTextureDescriptor.usage = MTLTextureUsageRenderTarget;
 #if TARGET_OS_OSX || TARGET_OS_SIMULATOR || TARGET_OS_MACCATALYST
     stencilTextureDescriptor.storageMode = MTLStorageModePrivate;
