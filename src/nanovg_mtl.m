@@ -44,6 +44,8 @@
 #  include "mnvg_bitcode/macos.h"
 #elif TARGET_OS_TV
 #  include "mnvg_bitcode/tvos.h"
+#elif TARGET_OS_VISION
+#  include "mnvg_bitcode/xros.h"
 #else
 #  define MNVG_INVALID_TARGET
 #endif
@@ -667,6 +669,8 @@ enum MNVGTarget mnvgTarget() {
   return MNVG_MACOS;
 #elif TARGET_OS_TV
   return MNVG_TVOS;
+#elif TARGET_OS_VISION
+  return MNVG_VISIONOS;
 #else
   return MNVG_UNKNOWN;
 #endif
@@ -1025,6 +1029,9 @@ enum MNVGTarget mnvgTarget() {
 #elif TARGET_OS_TV
   metal_library_bitcode = mnvg_bitcode_tvos;
   metal_library_bitcode_len = mnvg_bitcode_tvos_len;
+#elif TARGET_OS_VISION
+  metal_library_bitcode = mnvg_bitcode_xros;
+  metal_library_bitcode_len = mnvg_bitcode_xros_len;
 #endif
 
   dispatch_data_t data = dispatch_data_create(metal_library_bitcode,
