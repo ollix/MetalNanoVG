@@ -192,6 +192,8 @@ typedef struct MNVGfragUniforms MNVGfragUniforms;
 
 - (void)convexFill:(MNVGcall*)call;
 
+- (void)createSamplerForTexture:(MNVGtexture*)tex;
+
 -(void)fill:(MNVGcall*)call;
 
 - (MNVGtexture*)findTexture:(int)id;
@@ -565,6 +567,7 @@ int mnvgCreateImageFromHandle(NVGcontext* ctx, void* textureId, int imageFlags) 
   tex->type = NVG_TEXTURE_RGBA;
   tex->tex = (__bridge id<MTLTexture>)textureId;
   tex->flags = imageFlags;
+  [mtl createSamplerForTexture:tex];
 
   return tex->id;
 }
@@ -915,6 +918,42 @@ enum MNVGTarget mnvgTarget() {
                      vertexStart:call->triangleOffset
                      vertexCount:call->triangleCount];
   [_renderEncoder setDepthStencilState:_defaultStencilState];
+}
+
+- (void)createSamplerForTexture:(MNVGtexture*)tex {
+  const int imageFlags = tex->flags;
+  // Only sample mip levels when the caller says they're populated. A texture
+  // from a handle may have mip levels allocated but only level 0 filled in.
+  const BOOL hasMipmaps = (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) &&
+                          tex->tex.mipmapLevelCount > 1;
+
+  MTLSamplerDescriptor* samplerDescriptor = [MTLSamplerDescriptor new];
+  if (imageFlags & NVG_IMAGE_NEAREST) {
+    samplerDescriptor.minFilter = MTLSamplerMinMagFilterNearest;
+    samplerDescriptor.magFilter = MTLSamplerMinMagFilterNearest;
+    if (hasMipmaps)
+      samplerDescriptor.mipFilter = MTLSamplerMipFilterNearest;
+  } else {
+    samplerDescriptor.minFilter = MTLSamplerMinMagFilterLinear;
+    samplerDescriptor.magFilter = MTLSamplerMinMagFilterLinear;
+    if (hasMipmaps)
+      samplerDescriptor.mipFilter = MTLSamplerMipFilterLinear;
+  }
+
+  if (imageFlags & NVG_IMAGE_REPEATX) {
+    samplerDescriptor.sAddressMode = MTLSamplerAddressModeRepeat;
+  } else {
+    samplerDescriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
+  }
+
+  if (imageFlags & NVG_IMAGE_REPEATY) {
+    samplerDescriptor.tAddressMode = MTLSamplerAddressModeRepeat;
+  } else {
+    samplerDescriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
+  }
+
+  tex->sampler = [_metalLayer.device
+      newSamplerStateWithDescriptor:samplerDescriptor];
 }
 
 - (MNVGtexture*)findTexture:(int)id {
@@ -1272,33 +1311,7 @@ enum MNVGTarget mnvgTarget() {
     }
   }
 
-  MTLSamplerDescriptor* samplerDescriptor = [MTLSamplerDescriptor new];
-  if (imageFlags & NVG_IMAGE_NEAREST) {
-    samplerDescriptor.minFilter = MTLSamplerMinMagFilterNearest;
-    samplerDescriptor.magFilter = MTLSamplerMinMagFilterNearest;
-    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
-      samplerDescriptor.mipFilter = MTLSamplerMipFilterNearest;
-  } else {
-    samplerDescriptor.minFilter = MTLSamplerMinMagFilterLinear;
-    samplerDescriptor.magFilter = MTLSamplerMinMagFilterLinear;
-    if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS)
-      samplerDescriptor.mipFilter = MTLSamplerMipFilterLinear;
-  }
-
-  if (imageFlags & NVG_IMAGE_REPEATX) {
-    samplerDescriptor.sAddressMode = MTLSamplerAddressModeRepeat;
-  } else {
-    samplerDescriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
-  }
-
-  if (imageFlags & NVG_IMAGE_REPEATY) {
-    samplerDescriptor.tAddressMode = MTLSamplerAddressModeRepeat;
-  } else {
-    samplerDescriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
-  }
-
-  tex->sampler = [_metalLayer.device
-      newSamplerStateWithDescriptor:samplerDescriptor];
+  [self createSamplerForTexture:tex];
 
   return tex->id;
 }
